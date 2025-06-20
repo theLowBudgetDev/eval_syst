@@ -2,6 +2,8 @@
 
 export type UserRoleType = 'ADMIN' | 'SUPERVISOR' | 'EMPLOYEE';
 
+// This AppUser type is for client-side use and API responses.
+// It should NOT include sensitive fields like password hashes.
 export interface AppUser {
   id: string;
   name: string;
@@ -12,7 +14,7 @@ export interface AppUser {
   avatarUrl?: string | null;
   role: UserRoleType;
   supervisorId?: string | null;
-  supervisor?: AppUser | null;
+  supervisor?: AppUser | null; // Nested supervisor details
   supervisedEmployees?: AppUser[];
   performanceScoresReceived?: PerformanceScore[];
   performanceScoresGiven?: PerformanceScore[];
@@ -107,15 +109,15 @@ export interface Goal {
 
 
 export interface EvaluationDistributionPoint {
-  name: string; 
-  value: number; 
-  fill?: string; 
+  name: string;
+  value: number;
+  fill?: string;
   [key: string]: any;
 }
 
 export interface PerformanceTrendPoint {
-  name: string; 
-  "Avg Score": number | null; 
+  name: string;
+  "Avg Score": number | null;
   [key: string]: any;
 }
 
@@ -128,7 +130,7 @@ export interface DashboardMetric {
   description?: string;
 }
 
-export type AuditActionType = 
+export type AuditActionType =
   | "USER_LOGIN" | "USER_LOGOUT"
   | "USER_CREATE" | "USER_UPDATE" | "USER_DELETE"
   | "GOAL_CREATE" | "GOAL_UPDATE" | "GOAL_DELETE"
@@ -138,7 +140,8 @@ export type AuditActionType =
   | "CRITERIA_CREATE" | "CRITERIA_UPDATE" | "CRITERIA_DELETE"
   | "ATTENDANCE_CREATE" | "ATTENDANCE_UPDATE" | "ATTENDANCE_DELETE"
   | "WORK_OUTPUT_CREATE" | "WORK_OUTPUT_UPDATE" | "WORK_OUTPUT_DELETE"
-  | "SYSTEM_STARTUP" | "SYSTEM_SETTINGS_UPDATE";
+  | "SYSTEM_STARTUP" | "SYSTEM_SETTINGS_UPDATE"
+  | "AUTH_LOGIN_SUCCESS" | "AUTH_LOGIN_FAILURE"; // Added for login attempts
 
 
 export interface AuditLog {

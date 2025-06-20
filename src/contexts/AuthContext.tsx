@@ -1,11 +1,9 @@
 
 "use client";
 
-import type { AppUser, UserRoleType } from "@/types"; // Updated import
+import type { AppUser, UserRoleType } from "@/types";
 import * as React from "react";
-import { useRouter } from "next/navigation";
-
-// UserRoleType is now imported from @/types
+import { useRouter, usePathname } from "next/navigation";
 
 export interface AuthContextType {
   user: AppUser | null;
@@ -16,22 +14,20 @@ export interface AuthContextType {
 
 const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
 
-// Mock users for simulation - roles are now UPPERCASE
-export const mockAuthUsers: AppUser[] = [
-  { id: "admin01", name: "Admin User", email: "admin@example.com", department: "IT", position: "System Admin", hireDate: "2020-01-01", role: "ADMIN", avatarUrl: "https://placehold.co/100x100.png?text=AU" },
-  { id: "sup01", name: "Supervisor Sam", email: "supervisor@example.com", department: "Engineering", position: "Team Lead", hireDate: "2019-05-10", role: "SUPERVISOR", avatarUrl: "https://placehold.co/100x100.png?text=SS" },
-  { id: "emp01", name: "Employee Eve", email: "employee@example.com", department: "Marketing", position: "Specialist", hireDate: "2022-03-15", role: "EMPLOYEE", supervisorId: "sup01", avatarUrl: "https://placehold.co/100x100.png?text=EE" },
+// Mock users for initial seeding and potentially for type reference if needed elsewhere
+// Password field is not part of AppUser type sent to client, but needed for seed.
+export const mockAuthUsers: Array<Omit<AppUser, 'password'> & { plainTextPassword?: string }> = [
+  { id: "admin01", name: "Admin User", email: "admin@example.com", department: "IT", position: "System Admin", hireDate: "2020-01-01", role: "ADMIN", avatarUrl: "https://placehold.co/100x100.png?text=AU", plainTextPassword: "password123" },
+  { id: "sup01", name: "Supervisor Sam", email: "supervisor@example.com", department: "Engineering", position: "Team Lead", hireDate: "2019-05-10", role: "SUPERVISOR", avatarUrl: "https://placehold.co/100x100.png?text=SS", plainTextPassword: "password123" },
+  { id: "emp01", name: "Employee Eve", email: "employee@example.com", department: "Marketing", position: "Specialist", hireDate: "2022-03-15", role: "EMPLOYEE", supervisorId: "sup01", avatarUrl: "https://placehold.co/100x100.png?text=EE", plainTextPassword: "password123" },
 ];
 
-// Helper to find mock supervisor name for initial mock data context (if needed, though API should provide this)
+// This part is mostly for the seed script's convenience for setting up supervisor relations
 mockAuthUsers.forEach(u => {
   if (u.supervisorId && u.role === 'EMPLOYEE') {
     const supervisor = mockAuthUsers.find(sup => sup.id === u.supervisorId);
     if (supervisor) {
-      // For mock data consistency, we'd populate the nested supervisor object
-      // This is more for the initial state of AuthContext if it relies on mockAuthUsers directly for complex objects
-      // In a real app, the user object from login API would have this.
-      u.supervisor = supervisor;
+      u.supervisor = supervisor as AppUser; // Cast as AppUser for the structure, password won't be there
     }
   }
 });
@@ -41,18 +37,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<AppUser | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const router = useRouter();
+  const pathname = usePathname();
 
   React.useEffect(() => {
     const storedUser = localStorage.getItem("evaltrackUser");
     if (storedUser) {
       try {
         const parsedUser = JSON.parse(storedUser) as AppUser;
-        // Basic validation: check for id and role (now uppercase)
-        if (parsedUser && parsedUser.id && parsedUser.role && 
+        if (parsedUser && parsedUser.id && parsedUser.role &&
             ['ADMIN', 'SUPERVISOR', 'EMPLOYEE'].includes(parsedUser.role)) {
             setUser(parsedUser);
         } else {
-            console.warn("Invalid stored user data, clearing.");
             localStorage.removeItem("evaltrackUser");
         }
       } catch (error) {
@@ -66,12 +61,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = (loggedInUser: AppUser) => {
     setUser(loggedInUser);
     localStorage.setItem("evaltrackUser", JSON.stringify(loggedInUser));
-    // Redirect based on role (uppercase)
-    if (loggedInUser.role === "ADMIN") {
+
+    // Redirect based on role
+    // Ensure pathname check to avoid redirect loop if already on target dashboard
+    if (loggedInUser.role === "ADMIN" && pathname !== "/") {
       router.push("/");
-    } else if (loggedInUser.role === "SUPERVISOR") {
+    } else if (loggedInUser.role === "SUPERVISOR" && pathname !== "/supervisor-dashboard") {
       router.push("/supervisor-dashboard");
-    } else { // EMPLOYEE
+    } else if (loggedInUser.role === "EMPLOYEE" && pathname !== "/employee-dashboard") {
       router.push("/employee-dashboard");
     }
   };
@@ -79,7 +76,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setUser(null);
     localStorage.removeItem("evaltrackUser");
-    router.push("/login");
+    if (pathname !== "/login") {
+        router.push("/login");
+    }
   };
 
   return (
@@ -97,4 +96,6 @@ export function useAuth() {
   return context;
 }
 
-export { mockAuthUsers }; // Exporting for login page or initial seeding if needed
+// mockAuthUsers is primarily for the seed script now.
+// It's not directly used for login by the client anymore.
+export { mockAuthUsers };

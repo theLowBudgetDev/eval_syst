@@ -1,37 +1,47 @@
 
 import { PrismaClient } from '@prisma/client';
 import type { UserRoleType, AttendanceStatusType, MessageEventType, GoalStatusType, AuditActionType, SystemSetting } from '../src/types';
-import { mockAuthUsers } from '../src/contexts/AuthContext'; 
+import { mockAuthUsers as originalMockAuthUsersConfig } from '../src/contexts/AuthContext';
 import {
   mockEvaluationCriteria,
   mockPerformanceScores as originalMockPerformanceScores,
   mockWorkOutputs as originalMockWorkOutputs,
   mockAttendanceRecords as originalMockAttendanceRecords,
   mockAutoMessageTriggers,
-} from '../src/lib/mockData'; 
+} from '../src/lib/mockData';
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 const GLOBAL_SETTINGS_ID = "global_settings";
+const SALT_ROUNDS = 10; // For bcrypt password hashing
+
+// Add a plainTextPassword to the mock user config temporarily for seeding
+const mockAuthUsersWithPasswords = originalMockAuthUsersConfig.map(user => ({
+  ...user,
+  plainTextPassword: "password123" // Assign a default password for all mock users
+}));
 
 async function main() {
   console.log('Start seeding ...');
 
-  // Clear existing data
+  // Clear existing data in a safe order
   await prisma.auditLog.deleteMany();
-  await prisma.goal.deleteMany(); 
+  await prisma.goal.deleteMany();
   await prisma.performanceScore.deleteMany();
   await prisma.workOutput.deleteMany();
   await prisma.attendanceRecord.deleteMany();
   await prisma.autoMessageTrigger.deleteMany();
   await prisma.evaluationCriteria.deleteMany();
-  await prisma.systemSetting.deleteMany(); // Clear system settings
-  await prisma.user.deleteMany({ where: { supervisorId: { not: null } } }); 
-  await prisma.user.deleteMany({ where: { supervisorId: null } }); 
+  await prisma.systemSetting.deleteMany();
+  // Delete users ensuring supervised employees are deleted first or supervisorId is nullable
+  await prisma.user.deleteMany({ where: { supervisorId: { not: null } } });
+  await prisma.user.deleteMany({ where: { supervisorId: null } });
+
 
   // Seed System Settings
   await prisma.systemSetting.upsert({
     where: { id: GLOBAL_SETTINGS_ID },
-    update: {}, // No update needed if it exists, just ensure it's there
+    update: {},
     create: {
       id: GLOBAL_SETTINGS_ID,
       appName: "EvalTrack Pro",
@@ -43,36 +53,20 @@ async function main() {
   });
   console.log('Seeded system settings.');
 
+  const supervisorUsers = mockAuthUsersWithPasswords.filter(u => u.role === 'SUPERVISOR');
+  const adminUsers = mockAuthUsersWithPasswords.filter(u => u.role === 'ADMIN');
+  const employeeUsers = mockAuthUsersWithPasswords.filter(u => u.role === 'EMPLOYEE');
 
-  const supervisorUsers = mockAuthUsers.filter(u => u.role === 'SUPERVISOR');
-  const adminUsers = mockAuthUsers.filter(u => u.role === 'ADMIN');
-  const employeeUsers = mockAuthUsers.filter(u => u.role === 'EMPLOYEE');
+  const createdUsersMap: { [mockId: string]: string } = {};
 
-  const createdUsersMap: { [mockId: string]: string } = {}; 
-
-  for (const user of supervisorUsers) {
+  for (const user of [...adminUsers, ...supervisorUsers]) { // Admins and Supervisors first
+    const hashedPassword = await bcrypt.hash(user.plainTextPassword, SALT_ROUNDS);
     const created = await prisma.user.create({
-      data: {
-        id: user.id, 
-        name: user.name,
-        email: user.email,
-        department: user.department,
-        position: user.position,
-        hireDate: new Date(user.hireDate),
-        avatarUrl: user.avatarUrl,
-        role: user.role as UserRoleType,
-      },
-    });
-    createdUsersMap[user.id] = created.id;
-    console.log(`Created supervisor with id: ${created.id} (original: ${user.id})`);
-  }
-
-  for (const user of adminUsers) {
-     const created = await prisma.user.create({
       data: {
         id: user.id,
         name: user.name,
         email: user.email,
+        password: hashedPassword, // Store hashed password
         department: user.department,
         position: user.position,
         hireDate: new Date(user.hireDate),
@@ -81,19 +75,21 @@ async function main() {
       },
     });
     createdUsersMap[user.id] = created.id;
-    console.log(`Created admin with id: ${created.id} (original: ${user.id})`);
+    console.log(`Created ${user.role.toLowerCase()} with id: ${created.id} (original: ${user.id})`);
   }
-  
+
   for (const user of employeeUsers) {
     const supervisorDbId = user.supervisorId ? createdUsersMap[user.supervisorId] : undefined;
     if (user.supervisorId && !supervisorDbId) {
         console.warn(`Supervisor with mock ID ${user.supervisorId} for employee ${user.name} not found in created users. Skipping supervisor assignment.`);
     }
+    const hashedPassword = await bcrypt.hash(user.plainTextPassword, SALT_ROUNDS);
     const created = await prisma.user.create({
       data: {
         id: user.id,
         name: user.name,
         email: user.email,
+        password: hashedPassword, // Store hashed password
         department: user.department,
         position: user.position,
         hireDate: new Date(user.hireDate),
@@ -105,7 +101,8 @@ async function main() {
     createdUsersMap[user.id] = created.id;
     console.log(`Created employee with id: ${created.id} (original: ${user.id}), supervisorId: ${supervisorDbId || 'N/A'}`);
   }
-  console.log('Seeded users.');
+  console.log('Seeded users with hashed passwords.');
+
 
   const createdCriteria: { [key: string]: string } = {};
   for (const criteria of mockEvaluationCriteria) {
@@ -139,7 +136,7 @@ async function main() {
         },
       });
     } else {
-      console.warn(`Skipping performance score due to missing DB ID: emp-${!!employeeDbId}, crit-${!!criteriaDbId}, eval-${!!evaluatorDbId || !score.evaluatorId} for mock score ${score.id}`);
+      console.warn(`Skipping performance score due to missing DB ID: emp-${!!employeeDbId}, crit-${!!criteriaDbId}, eval-${!!evaluatorDbId || !score.evaluatorId} for mock score ID ${score.id || 'N/A'}`);
     }
   }
   console.log('Seeded performance scores.');
@@ -165,7 +162,7 @@ async function main() {
   for (const record of originalMockAttendanceRecords) {
      const employeeDbId = createdUsersMap[record.employeeId];
      if (employeeDbId) {
-        const prismaStatus: AttendanceStatusType = record.status as AttendanceStatusType; 
+        const prismaStatus: AttendanceStatusType = record.status as AttendanceStatusType;
         if (!["PRESENT", "ABSENT", "LATE", "ON_LEAVE"].includes(prismaStatus)) {
              console.warn(`Unknown attendance status: ${record.status}. Skipping record.`);
             continue;
@@ -201,18 +198,18 @@ async function main() {
   }
   console.log('Seeded auto message triggers.');
 
-  const employeeUserForGoal = employeeUsers[0]; 
-  const supervisorUserForGoal = supervisorUsers[0]; 
+  const firstEmployeeForGoal = mockAuthUsersWithPasswords.find(u => u.role === 'EMPLOYEE');
+  const firstSupervisorForGoal = mockAuthUsersWithPasswords.find(u => u.role === 'SUPERVISOR');
 
-  if (createdUsersMap[employeeUserForGoal.id]) {
+  if (firstEmployeeForGoal && createdUsersMap[firstEmployeeForGoal.id]) {
     await prisma.goal.create({
       data: {
         title: "Complete Project Alpha Q3",
         description: "Finalize all modules for Project Alpha and deploy to staging.",
         status: "IN_PROGRESS",
-        dueDate: new Date(new Date().getFullYear(), new Date().getMonth() + 2, 15), 
-        employeeId: createdUsersMap[employeeUserForGoal.id],
-        supervisorId: createdUsersMap[employeeUserForGoal.supervisorId!] || null,
+        dueDate: new Date(new Date().getFullYear(), new Date().getMonth() + 2, 15),
+        employeeId: createdUsersMap[firstEmployeeForGoal.id],
+        supervisorId: firstEmployeeForGoal.supervisorId ? createdUsersMap[firstEmployeeForGoal.supervisorId] : null,
       },
     });
     await prisma.goal.create({
@@ -220,29 +217,26 @@ async function main() {
         title: "Learn Advanced React Patterns",
         description: "Complete online course and build a demo project.",
         status: "NOT_STARTED",
-        employeeId: createdUsersMap[employeeUserForGoal.id],
-        supervisorId: createdUsersMap[employeeUserForGoal.supervisorId!] || null,
+        employeeId: createdUsersMap[firstEmployeeForGoal.id],
+        supervisorId: firstEmployeeForGoal.supervisorId ? createdUsersMap[firstEmployeeForGoal.supervisorId] : null,
       },
     });
   }
-  if (createdUsersMap[supervisorUserForGoal.id]) {
+  if (firstSupervisorForGoal && createdUsersMap[firstSupervisorForGoal.id]) {
      await prisma.goal.create({
       data: {
         title: "Mentor New Team Hires",
         description: "Onboard and mentor two new engineers joining the team.",
         status: "IN_PROGRESS",
         dueDate: new Date(new Date().getFullYear(), new Date().getMonth() + 3, 1),
-        employeeId: createdUsersMap[supervisorUserForGoal.id], 
+        employeeId: createdUsersMap[firstSupervisorForGoal.id],
       },
     });
   }
   console.log('Seeded goals.');
 
-  // Seed Audit Logs
   const adminUserIdForLog = adminUsers[0] ? createdUsersMap[adminUsers[0].id] : null;
   const supervisorUserIdForLog = supervisorUsers[0] ? createdUsersMap[supervisorUsers[0].id] : null;
-  const employeeUserIdForLog = employeeUsers[0] ? createdUsersMap[employeeUsers[0].id] : null;
-
 
   if (adminUserIdForLog) {
     await prisma.auditLog.create({
@@ -262,25 +256,24 @@ async function main() {
       }
     });
   }
-  if (supervisorUserIdForLog && employeeUserIdForLog) {
+  if (supervisorUserIdForLog && firstEmployeeForGoal && createdUsersMap[firstEmployeeForGoal.id]) {
      await prisma.auditLog.create({
       data: {
         userId: supervisorUserIdForLog,
         action: "EVALUATION_CREATE" as AuditActionType,
         targetType: "PerformanceScore",
-        targetId: "mockScoreId1", 
-        details: { employeeEvaluated: employeeUsers[0].name }
+        targetId: "mockScoreId1_from_seed", // Use a more descriptive mock ID
+        details: { employeeEvaluated: firstEmployeeForGoal.name }
       }
     });
   }
    await prisma.auditLog.create({
       data: {
-        action: "SYSTEM_STARTUP" as AuditActionType, 
-        details: { message: "System initialized successfully." }
+        action: "SYSTEM_STARTUP" as AuditActionType,
+        details: { message: "System initialized successfully during seed." }
       }
     });
   console.log('Seeded audit logs.');
-
 
   console.log('Seeding finished.');
 }

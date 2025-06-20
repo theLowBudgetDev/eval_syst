@@ -2,48 +2,83 @@
 "use client";
 
 import * as React from "react";
+import { useForm, SubmitHandler } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useAuth, mockAuthUsers } from "@/contexts/AuthContext";
+import { Input } from "@/components/ui/input";
+import { useAuth } from "@/contexts/AuthContext";
 import type { AppUser } from "@/types";
 import { useRouter } from "next/navigation";
-import { LogIn, Loader2 } from "lucide-react";
+import { LogIn, Loader2, AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+const loginSchema = z.object({
+  email: z.string().email({ message: "Invalid email address" }),
+  password: z.string().min(1, { message: "Password is required" }),
+});
+
+type LoginFormInputs = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const { login, user, isLoading: authIsLoading } = useAuth();
-  const [selectedUserId, setSelectedUserId] = React.useState<string>("");
   const [isLoggingIn, setIsLoggingIn] = React.useState(false);
+  const [loginError, setLoginError] = React.useState<string | null>(null);
   const router = useRouter();
+  const { toast } = useToast();
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginFormInputs>({
+    resolver: zodResolver(loginSchema),
+  });
 
   React.useEffect(() => {
     if (!authIsLoading && user) {
-      // Redirect logic is now handled in AuthContext and AppContent
+      // Redirect logic is handled in AuthContext and AppContent
     }
   }, [user, authIsLoading, router]);
 
-  const handleLogin = () => {
-    if (!selectedUserId) {
-        alert("Please select a user to login."); // Or use a toast
-        return;
-    }
+  const handleLoginSubmit: SubmitHandler<LoginFormInputs> = async (data) => {
     setIsLoggingIn(true);
-    const userToLogin = mockAuthUsers.find(u => u.id === selectedUserId);
-    if (userToLogin) {
-      // Simulate API call delay
-      setTimeout(() => {
-        login(userToLogin);
-        // No need to push route here, AuthContext handles it
-        setIsLoggingIn(false);
-      }, 500);
-    } else {
-      alert("Selected user not found."); // Or use a toast
+    setLoginError(null);
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Login failed. Please check your credentials.');
+      }
+
+      login(result as AppUser); // The API now returns AppUser directly
+      // Redirection is handled by AuthContext
+
+    } catch (error) {
+      const errorMessage = (error as Error).message || "An unexpected error occurred.";
+      setLoginError(errorMessage);
+      toast({
+        title: "Login Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
       setIsLoggingIn(false);
     }
   };
-  
+
   if (authIsLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
@@ -61,9 +96,7 @@ export default function LoginPage() {
       </div>
     );
   }
-  
-  // If user is already logged in, AppContent will handle redirection or show content
-  // So this check is mostly for when JS is disabled or router hasn't caught up
+
   if (user && !authIsLoading) {
      return (
         <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
@@ -80,32 +113,49 @@ export default function LoginPage() {
              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-12 w-12 text-primary"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
            </div>
           <CardTitle className="text-2xl font-bold font-headline">Welcome to EvalTrack</CardTitle>
-          <CardDescription>Please select a user profile to continue.</CardDescription>
+          <CardDescription>Please sign in to continue.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="user-select">Select User (Simulated Login)</Label>
-            <Select value={selectedUserId} onValueChange={setSelectedUserId} disabled={isLoggingIn}>
-              <SelectTrigger id="user-select">
-                <SelectValue placeholder="Select a user role" />
-              </SelectTrigger>
-              <SelectContent>
-                {mockAuthUsers.map((u) => (
-                  <SelectItem key={u.id} value={u.id}>
-                    {u.name} ({u.role.charAt(0).toUpperCase() + u.role.slice(1).toLowerCase()})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button type="button" className="w-full" onClick={handleLogin} disabled={!selectedUserId || isLoggingIn}>
-            {isLoggingIn ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
-            ) : (
-                <LogIn className="mr-2 h-4 w-4" />
+        <CardContent>
+          <form onSubmit={handleSubmit(handleLoginSubmit)} className="space-y-6">
+            {loginError && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{loginError}</AlertDescription>
+              </Alert>
             )}
-            {isLoggingIn ? "Logging in..." : "Login"}
-          </Button>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                {...register("email")}
+                disabled={isLoggingIn}
+                autoComplete="email"
+              />
+              {errors.email && <p className="text-sm text-destructive mt-1">{errors.email.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                {...register("password")}
+                disabled={isLoggingIn}
+                autoComplete="current-password"
+              />
+              {errors.password && <p className="text-sm text-destructive mt-1">{errors.password.message}</p>}
+            </div>
+            <Button type="submit" className="w-full" disabled={isLoggingIn}>
+              {isLoggingIn ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                  <LogIn className="mr-2 h-4 w-4" />
+              )}
+              {isLoggingIn ? "Signing in..." : "Sign In"}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>
