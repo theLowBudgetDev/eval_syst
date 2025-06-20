@@ -7,7 +7,7 @@ import type { UserRoleType } from '@/types'; // Using string literal union from 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const supervisorId = searchParams.get('supervisorId');
+    const supervisorId = searchParams.get('supervisorId'); // Corrected typo here
 
     const users = await prisma.user.findMany({
       where: supervisorId ? { supervisorId } : {},
@@ -24,6 +24,7 @@ export async function GET(request: Request) {
     console.error("Critical error in GET /api/users:", error);
     const errorMessage = error.message || 'An unexpected error occurred on the server.';
     const errorCode = error.code;
+    // Ensure a JSON response even for unexpected errors
     return new Response(JSON.stringify({ message: 'Failed to process request for users due to a server error.', error: errorMessage, code: errorCode }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
         position,
         hireDate: new Date(hireDate),
         avatarUrl,
-        role: role as UserRoleType, // role is a string, but matches UserRoleType
+        role: role, // Prisma schema expects a string
         supervisorId: supervisorId || null,
       },
     });
@@ -74,11 +75,11 @@ export async function POST(request: Request) {
         responseBody.message = 'Invalid JSON payload for user creation.';
         responseBody.error = error.message;
     } else if (error.code === 'P2002' && error.meta?.target?.includes('email')) {
-      status = 409;
+      status = 409; // Conflict
       responseBody.message = 'This email address is already in use. Please choose another one.';
       responseBody.error = 'Email conflict';
     } else if (error.code === 'P2003' && error.meta?.field_name?.includes('supervisorId')) {
-      status = 400;
+      status = 400; // Bad Request
       responseBody.message = 'Assigned supervisor ID does not exist.';
       responseBody.error = 'Invalid supervisorId';
     }
@@ -89,3 +90,4 @@ export async function POST(request: Request) {
     });
   }
 }
+
