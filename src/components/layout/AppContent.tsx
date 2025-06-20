@@ -113,9 +113,9 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
 
   return (
     <TooltipProvider>
-      <SidebarProvider defaultOpen={false}>
+      <SidebarProvider defaultOpen={false}> {/* Sidebar closed by default */}
         <Sidebar collapsible="icon" className="hidden md:flex border-r border-sidebar-border">
-          <CustomSidebarHeader className="p-4 flex items-center justify-center border-b border-sidebar-border">
+          <CustomSidebarHeader className="p-4 h-16 flex items-center justify-center border-b border-sidebar-border"> {/* Added h-16 */}
              <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-primary"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
                 <h1 className="text-xl font-bold font-headline tracking-tight group-data-[collapsible=icon]:hidden">EvalTrack</h1>
@@ -136,8 +136,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
           </CustomSidebarFooter>
         </Sidebar>
 
-        {/* Main content area wrapper: Removed md:peer-data-[collapsible=icon]:ml-[var(--sidebar-width-icon)] */}
-        <div className="flex flex-col flex-1 peer-data-[collapsible=offcanvas]:ml-0 transition-[margin-left] duration-300 ease-in-out">
+        <div className="flex flex-col flex-1"> {/* Removed peer-data specific margin classes */}
           <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/95 backdrop-blur-sm px-4 md:px-6 justify-between">
             <div className="flex items-center gap-2">
               <Sheet open={isMobileSheetOpen} onOpenChange={setIsMobileSheetOpen}>
@@ -153,7 +152,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
                 >
                   <ShadSheetHeader className="p-0"> 
                     <ShadSheetTitle className="sr-only">Main Navigation Menu</ShadSheetTitle>
-                     <CustomSidebarHeader className="p-4 flex items-center justify-start border-b border-sidebar-border">
+                     <CustomSidebarHeader className="p-4 h-16 flex items-center justify-start border-b border-sidebar-border"> {/* Added h-16 */}
                         <Link href="/" className="flex items-center gap-2" onClick={handleMobileLinkClick}>
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-primary"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
                           <h1 className="text-xl font-bold font-headline tracking-tight">EvalTrack</h1>
