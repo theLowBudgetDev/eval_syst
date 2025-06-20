@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { PlusCircle, Edit, Trash2, Search, Filter, MoreHorizontal, Eye, Loader2 } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Search, Filter, MoreHorizontal, Eye, Loader2, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/PageHeader";
 import {
@@ -25,16 +25,28 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { AppUser } from "@/types";
+import type { AppUser, UserRoleType } from "@/types";
 import { EmployeeForm } from "@/components/employees/EmployeeForm";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
+
+type SortableKey = keyof Pick<AppUser, 'name' | 'email' | 'department' | 'position' | 'hireDate' | 'role'> | 'supervisorName';
+type SortDirection = 'asc' | 'desc';
+
+const USER_ROLES_OPTIONS: UserRoleType[] = ['ADMIN', 'SUPERVISOR', 'EMPLOYEE'];
 
 export default function EmployeesPage() {
   const { user, isLoading: authIsLoading } = useAuth();
@@ -43,7 +55,14 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = React.useState<AppUser[]>([]);
   const [supervisorsForForm, setSupervisorsForForm] = React.useState<AppUser[]>([]);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
+  
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [departmentFilter, setDepartmentFilter] = React.useState<string>("all");
+  const [roleFilter, setRoleFilter] = React.useState<UserRoleType | "all">("all");
+  
+  const [sortColumn, setSortColumn] = React.useState<SortableKey>('name');
+  const [sortDirection, setSortDirection] = React.useState<SortDirection>('asc');
+
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editingEmployee, setEditingEmployee] = React.useState<AppUser | null>(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = React.useState<Set<string>>(new Set());
@@ -55,6 +74,11 @@ export default function EmployeesPage() {
   const [isDetailDialogOpen, setIsDetailDialogOpen] = React.useState(false);
   const [viewingEmployee, setViewingEmployee] = React.useState<AppUser | null>(null);
   const { toast } = useToast();
+
+  const uniqueDepartments = React.useMemo(() => {
+    const depts = new Set(employees.map(emp => emp.department).filter(Boolean));
+    return Array.from(depts).sort();
+  }, [employees]);
 
   const fetchData = React.useCallback(async () => {
     setIsLoadingData(true);
@@ -97,20 +121,53 @@ export default function EmployeesPage() {
     }
   }, [user, authIsLoading, router, fetchData]);
 
-  const filteredEmployees = React.useMemo(() => {
+  const handleSort = (column: SortableKey) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const filteredAndSortedEmployees = React.useMemo(() => {
     let displayEmployees = employees;
     if (user?.role === 'SUPERVISOR') {
       displayEmployees = employees.filter(emp => emp.supervisorId === user.id || emp.id === user.id);
     }
 
-    return displayEmployees.filter(
+    displayEmployees = displayEmployees.filter(
       (employee) =>
-        employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        employee.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (employee.department && employee.department.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (employee.position && employee.position.toLowerCase().includes(searchTerm.toLowerCase()))
+        (employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        employee.email.toLowerCase().includes(searchTerm.toLowerCase())) &&
+        (departmentFilter === "all" || employee.department === departmentFilter) &&
+        (roleFilter === "all" || employee.role === roleFilter)
     );
-  }, [employees, searchTerm, user]);
+    
+    return [...displayEmployees].sort((a, b) => {
+        let aValue: any = a[sortColumn as keyof AppUser];
+        let bValue: any = b[sortColumn as keyof AppUser];
+
+        if (sortColumn === 'supervisorName') {
+            aValue = a.supervisor?.name || '';
+            bValue = b.supervisor?.name || '';
+        } else if (sortColumn === 'hireDate') {
+            aValue = parseISO(a.hireDate).getTime();
+            bValue = parseISO(b.hireDate).getTime();
+        }
+        
+        if (aValue === null || aValue === undefined) aValue = '';
+        if (bValue === null || bValue === undefined) bValue = '';
+
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+            return sortDirection === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+        }
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+             return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+        }
+        return 0;
+    });
+  }, [employees, searchTerm, user, departmentFilter, roleFilter, sortColumn, sortDirection]);
 
   const canPerformAdminActions = user?.role === 'ADMIN';
 
@@ -210,7 +267,7 @@ export default function EmployeesPage() {
   const handleSelectAll = (checked: boolean | 'indeterminate') => {
     if (!canPerformAdminActions) return;
     if (checked === true) {
-      setSelectedEmployeeIds(new Set(filteredEmployees.map(emp => emp.id)));
+      setSelectedEmployeeIds(new Set(filteredAndSortedEmployees.map(emp => emp.id)));
     } else {
       setSelectedEmployeeIds(new Set());
     }
@@ -265,9 +322,8 @@ export default function EmployeesPage() {
     setSelectedEmployeeIds(new Set());
   };
 
-
-  const isAllSelected = filteredEmployees.length > 0 && selectedEmployeeIds.size === filteredEmployees.length;
-  const isIndeterminate = selectedEmployeeIds.size > 0 && selectedEmployeeIds.size < filteredEmployees.length;
+  const isAllSelected = filteredAndSortedEmployees.length > 0 && selectedEmployeeIds.size === filteredAndSortedEmployees.length;
+  const isIndeterminate = selectedEmployeeIds.size > 0 && selectedEmployeeIds.size < filteredAndSortedEmployees.length;
 
   if (authIsLoading) {
     return (
@@ -282,6 +338,14 @@ export default function EmployeesPage() {
   if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPERVISOR')) {
     return <div className="flex justify-center items-center h-screen">Unauthorized access. Please log in with appropriate credentials.</div>;
   }
+  
+  const renderSortIcon = (column: SortableKey) => {
+    if (sortColumn === column) {
+      return sortDirection === 'asc' ? '▲' : '▼';
+    }
+    return <ArrowUpDown className="h-3 w-3 opacity-30 group-hover:opacity-100 transition-opacity" />;
+  };
+
 
   return (
     <div className="space-y-6">
@@ -297,8 +361,8 @@ export default function EmployeesPage() {
         }
       />
 
-      <div className="flex flex-col sm:flex-row items-center gap-4 mb-6">
-        <div className="relative flex-1 w-full sm:max-w-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="relative sm:col-span-2 md:col-span-1">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
@@ -309,11 +373,22 @@ export default function EmployeesPage() {
             disabled={isLoadingData}
           />
         </div>
-        <Button variant="outline" onClick={() => toast({title: "Filter Clicked", description: "Advanced filter functionality coming soon!"})} disabled={isLoadingData}>
-          <Filter className="mr-2 h-4 w-4" /> Filter
-        </Button>
+         <Select value={departmentFilter} onValueChange={setDepartmentFilter} disabled={isLoadingData}>
+            <SelectTrigger><SelectValue placeholder="Filter by Department" /></SelectTrigger>
+            <SelectContent>
+                <SelectItem value="all">All Departments</SelectItem>
+                {uniqueDepartments.map(dept => <SelectItem key={dept} value={dept}>{dept}</SelectItem>)}
+            </SelectContent>
+        </Select>
+        <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value as UserRoleType | "all")} disabled={isLoadingData}>
+            <SelectTrigger><SelectValue placeholder="Filter by Role" /></SelectTrigger>
+            <SelectContent>
+                <SelectItem value="all">All Roles</SelectItem>
+                {USER_ROLES_OPTIONS.map(role => <SelectItem key={role} value={role}>{role.charAt(0) + role.slice(1).toLowerCase()}</SelectItem>)}
+            </SelectContent>
+        </Select>
         {canPerformAdminActions && selectedEmployeeIds.size > 0 && (
-           <Button variant="destructive" onClick={handleDeleteSelected} disabled={isDeleting || isLoadingData}>
+           <Button variant="destructive" onClick={handleDeleteSelected} disabled={isDeleting || isLoadingData} className="w-full sm:w-auto md:col-start-4">
              {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
              Delete ({selectedEmployeeIds.size})
            </Button>
@@ -330,17 +405,32 @@ export default function EmployeesPage() {
                       checked={isAllSelected || (isIndeterminate ? 'indeterminate' : false)}
                       onCheckedChange={handleSelectAll}
                       aria-label="Select all rows"
-                      disabled={isLoadingData || !filteredEmployees.length}
+                      disabled={isLoadingData || !filteredAndSortedEmployees.length}
                     />
                 </TableHead>
               )}
               <TableHead className="w-[80px]">Avatar</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Department</TableHead>
-              <TableHead>Position</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Supervisor</TableHead>
+              <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('name')}>
+                <div className="flex items-center gap-1">Name {renderSortIcon('name')}</div>
+              </TableHead>
+              <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('email')}>
+                 <div className="flex items-center gap-1">Email {renderSortIcon('email')}</div>
+              </TableHead>
+              <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('department')}>
+                 <div className="flex items-center gap-1">Department {renderSortIcon('department')}</div>
+              </TableHead>
+              <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('position')}>
+                 <div className="flex items-center gap-1">Position {renderSortIcon('position')}</div>
+              </TableHead>
+              <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('role')}>
+                 <div className="flex items-center gap-1">Role {renderSortIcon('role')}</div>
+              </TableHead>
+              <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('supervisorName')}>
+                 <div className="flex items-center gap-1">Supervisor {renderSortIcon('supervisorName')}</div>
+              </TableHead>
+               <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('hireDate')}>
+                 <div className="flex items-center gap-1">Hire Date {renderSortIcon('hireDate')}</div>
+              </TableHead>
               <TableHead className="text-right w-[100px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -356,11 +446,12 @@ export default function EmployeesPage() {
                         <TableCell><Skeleton className="h-4 w-28" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                         <TableCell className="text-right"><Skeleton className="h-8 w-8" /></TableCell>
                     </TableRow>
                 ))
-            ) : filteredEmployees.length > 0 ? (
-              filteredEmployees.map((employee) => (
+            ) : filteredAndSortedEmployees.length > 0 ? (
+              filteredAndSortedEmployees.map((employee) => (
                 <TableRow key={employee.id} data-state={selectedEmployeeIds.has(employee.id) ? "selected" : ""}>
                   {canPerformAdminActions && (
                     <TableCell>
@@ -385,6 +476,7 @@ export default function EmployeesPage() {
                   <TableCell>{employee.position}</TableCell>
                   <TableCell><Badge variant="outline">{employee.role.charAt(0) + employee.role.slice(1).toLowerCase()}</Badge></TableCell>
                   <TableCell>{employee.supervisor?.name || "N/A"}</TableCell>
+                  <TableCell>{format(parseISO(employee.hireDate), "PP")}</TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -418,8 +510,8 @@ export default function EmployeesPage() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={canPerformAdminActions ? 9 : 8} className="h-24 text-center text-muted-foreground">
-                  No employees found.
+                <TableCell colSpan={canPerformAdminActions ? 10 : 9} className="h-24 text-center text-muted-foreground">
+                  No employees found matching your filters.
                 </TableCell>
               </TableRow>
             )}
@@ -468,7 +560,7 @@ export default function EmployeesPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3">
                 <Avatar className="h-12 w-12 border">
-                  <AvatarImage src={viewingEmployee.avatarUrl || undefined} alt={viewingEmployee.name} data-ai-hint="person photo" />
+                  <AvatarImage src={viewingEmployee.avatarUrl || undefined} alt={viewingEmployee.name} data-ai-hint="person photo"/>
                   <AvatarFallback>{viewingEmployee.name.substring(0, 2).toUpperCase()}</AvatarFallback>
                 </Avatar>
                 {viewingEmployee.name}
@@ -496,7 +588,7 @@ export default function EmployeesPage() {
               </div>
               <div className="grid grid-cols-[100px_1fr] items-start gap-2">
                 <Label className="text-muted-foreground font-semibold">Hire Date:</Label>
-                <span>{format(new Date(viewingEmployee.hireDate), "MMMM d, yyyy")}</span>
+                <span>{format(parseISO(viewingEmployee.hireDate), "MMMM d, yyyy")}</span>
               </div>
               <div className="grid grid-cols-[100px_1fr] items-start gap-2">
                 <Label className="text-muted-foreground font-semibold">Supervisor:</Label>

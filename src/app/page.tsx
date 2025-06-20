@@ -4,8 +4,7 @@
 import * as React from "react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { mockPerformanceTrendData, mockEvaluationDistributionData } from "@/lib/mockData";
-import type { DashboardMetric, PerformanceScore, AppUser } from "@/types";
+import type { DashboardMetric, PerformanceScore, AppUser, PerformanceTrendPoint, EvaluationDistributionPoint } from "@/types";
 import { TrendingUp, TrendingDown, Minus, AlertTriangle, Users, ClipboardList, Loader2 } from "lucide-react";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Line, LineChart, Pie, PieChart, Cell } from "recharts";
@@ -24,22 +23,22 @@ const chartConfigPerformance = {
 };
 
 const chartConfigDistribution = {
-  employees: {
+  employees: { // Not directly used for colors, but good for consistency
     label: "Employees",
   },
-  below: {
+  "Below Expectations": {
     label: "Below Expectations",
     color: "hsl(var(--destructive))",
   },
-  meets: {
+  "Meets Expectations": {
     label: "Meets Expectations",
     color: "hsl(var(--chart-3))",
   },
-  exceeds: {
+  "Exceeds Expectations": {
     label: "Exceeds Expectations",
     color: "hsl(var(--chart-2))",
   },
-  outstanding: {
+  "Outstanding": {
     label: "Outstanding",
     color: "hsl(var(--primary))",
   },
@@ -53,6 +52,11 @@ export default function DashboardPage() {
 
   const [metrics, setMetrics] = React.useState<DashboardMetric[]>([]);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
+  const [isLoadingCharts, setIsLoadingCharts] = React.useState(true);
+
+  const [performanceTrendData, setPerformanceTrendData] = React.useState<PerformanceTrendPoint[]>([]);
+  const [evaluationDistributionData, setEvaluationDistributionData] = React.useState<EvaluationDistributionPoint[]>([]);
+
 
   React.useEffect(() => {
     if (!authIsLoading && user) {
@@ -62,10 +66,14 @@ export default function DashboardPage() {
         else router.push('/login');
       } else {
         setIsLoadingData(true);
+        setIsLoadingCharts(true);
+
         Promise.all([
           fetch('/api/users'),
-          fetch('/api/performance-scores')
-        ]).then(async ([usersRes, scoresRes]) => {
+          fetch('/api/performance-scores'),
+          fetch('/api/analytics/performance-trends'),
+          fetch('/api/analytics/evaluation-distribution')
+        ]).then(async ([usersRes, scoresRes, trendsRes, distributionRes]) => {
           if (!usersRes.ok) {
             const errorBody = await usersRes.json().catch(() => ({ message: `Failed to fetch users (status ${usersRes.status}, non-JSON response)` }));
             throw new Error(errorBody.error || errorBody.message || `Failed to fetch users (status ${usersRes.status})`);
@@ -78,6 +86,18 @@ export default function DashboardPage() {
           }
           const scoresData: PerformanceScore[] = await scoresRes.json();
 
+          if (!trendsRes.ok) {
+            const errorBody = await trendsRes.json().catch(() => ({ message: `Failed to fetch performance trends (status ${trendsRes.status}, non-JSON response)` }));
+            throw new Error(errorBody.error || errorBody.message || `Failed to fetch trends (status ${trendsRes.status})`);
+          }
+          setPerformanceTrendData(await trendsRes.json());
+          
+          if (!distributionRes.ok) {
+            const errorBody = await distributionRes.json().catch(() => ({ message: `Failed to fetch evaluation distribution (status ${distributionRes.status}, non-JSON response)` }));
+            throw new Error(errorBody.error || errorBody.message || `Failed to fetch distribution (status ${distributionRes.status})`);
+          }
+          setEvaluationDistributionData(await distributionRes.json());
+
           const totalEmployees = usersData.length;
           const pendingEvaluations = usersData.filter(u => (u.role === 'EMPLOYEE' || u.role === 'SUPERVISOR') && !scoresData.some(s => s.employeeId === u.id && new Date(s.evaluationDate) > new Date(new Date().setMonth(new Date().getMonth()-3)))).length;
 
@@ -85,12 +105,14 @@ export default function DashboardPage() {
             ? (scoresData.reduce((acc, curr) => acc + curr.score, 0) / scoresData.length)
             : null;
           const averageScore = averageScoreValue ? averageScoreValue.toFixed(1) + "/5" : "N/A";
-          const previousAverageScore = 4.0; // Mock previous average for trend calculation
+          
           let trend = 0;
+          // Example trend calculation: Compare current average to a static previous average.
+          // In a real app, you'd fetch historical averages for this.
+          const previousAverageScore = 4.0; 
           if (averageScoreValue !== null) {
              trend = parseFloat((( (averageScoreValue - previousAverageScore) / previousAverageScore ) * 100).toFixed(1));
           }
-
 
           setMetrics([
             { title: 'Total Employees', value: totalEmployees, icon: Users, trend: 0, description: 'Active users in system' },
@@ -98,6 +120,8 @@ export default function DashboardPage() {
             { title: 'Overall Performance', value: averageScore, icon: TrendingUp, trend: trend, description: 'Avg score vs. last cycle' },
             { title: 'Attendance Issues', value: 0, icon: AlertTriangle, trend: 0, description: 'This week (mock data)' },
           ]);
+          setIsLoadingData(false);
+          setIsLoadingCharts(false);
         }).catch(err => {
           toast({ title: "Error Fetching Dashboard Data", description: (err as Error).message, variant: "destructive" });
           setMetrics([
@@ -106,7 +130,11 @@ export default function DashboardPage() {
              { title: 'Overall Performance', value: 'N/A', icon: TrendingUp},
              { title: 'Attendance Issues', value: 'N/A', icon: AlertTriangle},
           ]);
-        }).finally(() => setIsLoadingData(false));
+          setPerformanceTrendData([]);
+          setEvaluationDistributionData([]);
+          setIsLoadingData(false);
+          setIsLoadingCharts(false);
+        });
       }
     } else if (!authIsLoading && !user) {
       router.push('/login');
@@ -118,7 +146,7 @@ export default function DashboardPage() {
         <div className="space-y-6">
             <PageHeader title="Admin Dashboard" description="System summary and key performance indicators." />
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-[120px] w-full rounded-lg" />)}
+                {[...Array(4)].map((_, i) => <MetricCardSkeleton key={i}/>)}
             </div>
             <div className="grid gap-6 md:grid-cols-2">
                 <Skeleton className="h-[350px] w-full rounded-lg" />
@@ -144,13 +172,14 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="shadow-lg border-border">
           <CardHeader>
-            <CardTitle>Performance Trends (Mock Data)</CardTitle>
+            <CardTitle>Performance Trends</CardTitle>
             <CardDescription>Average performance scores over the last 6 months.</CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoadingData ? <Skeleton className="h-[300px] w-full" /> : (
+            {isLoadingCharts ? <Skeleton className="h-[300px] w-full" /> : 
+            performanceTrendData.length > 0 ? (
             <ChartContainer config={chartConfigPerformance} className="h-[300px] w-full">
-              <LineChart data={mockPerformanceTrendData} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
+              <LineChart data={performanceTrendData} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" />
                 <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} />
                 <YAxis domain={[0, 5]} tickLine={false} axisLine={false} tickMargin={8} />
@@ -158,22 +187,25 @@ export default function DashboardPage() {
                 <Line dataKey="Avg Score" type="monotone" stroke="var(--color-Avg Score)" strokeWidth={2} dot={true} />
               </LineChart>
             </ChartContainer>
+            ) : (
+              <p className="text-muted-foreground h-[300px] flex items-center justify-center">No performance trend data available.</p>
             )}
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-border">
           <CardHeader>
-            <CardTitle>Evaluation Distribution (Mock Data)</CardTitle>
-            <CardDescription>Distribution of employees by performance category.</CardDescription>
+            <CardTitle>Evaluation Distribution</CardTitle>
+            <CardDescription>Distribution of employees by performance category based on latest scores.</CardDescription>
           </CardHeader>
           <CardContent className="flex items-center justify-center">
-          {isLoadingData ? <Skeleton className="h-[300px] w-full max-w-xs" /> : (
+          {isLoadingCharts ? <Skeleton className="h-[300px] w-full max-w-xs" /> : 
+          evaluationDistributionData.some(d => d.value > 0) ? ( // Check if there's any data to display
             <ChartContainer config={chartConfigDistribution} className="h-[300px] w-full max-w-xs">
               <PieChart>
                 <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
                 <Pie
-                  data={mockEvaluationDistributionData}
+                  data={evaluationDistributionData}
                   dataKey="value"
                   nameKey="name"
                   cx="50%"
@@ -181,6 +213,7 @@ export default function DashboardPage() {
                   outerRadius={100}
                   labelLine={false}
                   label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                    if (percent === 0) return null; // Don't render label for 0%
                     const RADIAN = Math.PI / 180;
                     const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
                     const x = cx + radius * Math.cos(-midAngle * RADIAN);
@@ -192,18 +225,17 @@ export default function DashboardPage() {
                     );
                   }}
                 >
-                  {mockEvaluationDistributionData.map((entry, index) => (
+                  {evaluationDistributionData.map((entry, index) => (
                      <Cell key={`cell-${index}`} fill={
-                       entry.name === "Below Expectations" ? chartConfigDistribution.below.color :
-                       entry.name === "Meets Expectations" ? chartConfigDistribution.meets.color :
-                       entry.name === "Exceeds Expectations" ? chartConfigDistribution.exceeds.color :
-                       chartConfigDistribution.outstanding.color
+                       chartConfigDistribution[entry.name as keyof typeof chartConfigDistribution]?.color || 'hsl(var(--muted))'
                      } />
                   ))}
                 </Pie>
                 <ChartLegend content={<ChartLegendContent nameKey="name" />} className="-translate-y-2 flex-wrap gap-2 [&>*]:basis-1/4 [&>*]:justify-center" />
               </PieChart>
             </ChartContainer>
+          ) : (
+            <p className="text-muted-foreground h-[300px] flex items-center justify-center">No evaluation distribution data available.</p>
           )}
           </CardContent>
         </Card>
