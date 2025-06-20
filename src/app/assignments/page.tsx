@@ -31,6 +31,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { mockEmployees, mockSupervisors } from "@/lib/mockData";
 import type { Employee, Supervisor, SupervisorAssignment } from "@/types";
 import { UserPlus, UserCheck, Edit, Search } from "lucide-react";
