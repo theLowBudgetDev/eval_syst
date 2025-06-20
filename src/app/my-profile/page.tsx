@@ -80,7 +80,7 @@ export default function MyProfilePage() {
             </div>
             <div>
               <Label className="text-muted-foreground">Department</Label>
-              <p><Badge variant="secondary">{user.department}</Badge></p>
+              <div><Badge variant="secondary">{user.department}</Badge></div>
             </div>
             <div>
               <Label className="text-muted-foreground">Hire Date</Label>
