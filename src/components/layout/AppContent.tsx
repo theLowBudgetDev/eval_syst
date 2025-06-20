@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/sheet';
 import { Menu, LogOut } from 'lucide-react';
 import { getNavLinks, type NavLink as NavLinkType } from '@/lib/navigation';
-import type { UserRoleType } from '@/types';
+import type { UserRoleType, AppUser } from '@/types'; // Import AppUser
 import { DarkModeToggle } from '@/components/shared/DarkModeToggle';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -61,18 +61,19 @@ function RenderNavLinks({ role, onLinkClick }: { role: UserRoleType | null, onLi
   return <>{renderLinks(navLinks)}</>;
 }
 
-function LayoutRenderer({ 
-  user, 
-  logout, 
-  isMobileSheetOpen, 
-  setIsMobileSheetOpen, 
-  children 
-}: { 
-  user: AppUser | null, 
-  logout: () => void, 
-  isMobileSheetOpen: boolean, 
-  setIsMobileSheetOpen: (open: boolean) => void, 
-  children: React.ReactNode 
+// Define LayoutRenderer as a separate component function
+function LayoutRenderer({
+  user,
+  logout,
+  isMobileSheetOpen,
+  setIsMobileSheetOpen,
+  children
+}: {
+  user: AppUser | null,
+  logout: () => void,
+  isMobileSheetOpen: boolean,
+  setIsMobileSheetOpen: (open: boolean) => void,
+  children: React.ReactNode
 }) {
   const sidebarContext = useSidebar(); // Called safely within SidebarProvider's context
 
@@ -130,9 +131,9 @@ function LayoutRenderer({
               <SheetContent
                 side="left"
                 className="p-0 w-[var(--sidebar-width-mobile,280px)] flex flex-col bg-sidebar"
-                aria-label="Main Navigation Menu" 
+                aria-label="Main Navigation Menu"
               >
-                <ShadSheetHeader className="p-0"> 
+                <ShadSheetHeader className="p-0">
                   <ShadSheetTitle className="sr-only">Main Navigation Menu</ShadSheetTitle>
                    <CustomSidebarHeader className="p-4 h-16 flex items-center justify-start border-b border-sidebar-border">
                       <Link href="/" className="flex items-center gap-2" onClick={handleMobileLinkClick}>
@@ -203,7 +204,6 @@ function LayoutRenderer({
   );
 }
 
-
 export default function AppContent({ children }: { children: React.ReactNode }) {
   const { user, logout, isLoading } = useAuth();
   const router = useRouter();
@@ -244,18 +244,16 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   }
 
   if (!user) {
-    // This case should ideally not be reached if the effect above works,
-    // but as a fallback.
-    return null; 
+    return null;
   }
-  
+
   return (
     <TooltipProvider>
       <SidebarProvider defaultOpen={false}> {/* Sidebar closed by default */}
-        <LayoutRenderer 
-          user={user} 
-          logout={logout} 
-          isMobileSheetOpen={isMobileSheetOpen} 
+        <LayoutRenderer
+          user={user}
+          logout={logout}
+          isMobileSheetOpen={isMobileSheetOpen}
           setIsMobileSheetOpen={setIsMobileSheetOpen}
         >
           {children}
@@ -264,6 +262,3 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     </TooltipProvider>
   );
 }
-
-// Ensure AppUser type is imported or defined if not already (it should be from '@/types')
-import type { AppUser } from '@/types';
