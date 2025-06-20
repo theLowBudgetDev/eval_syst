@@ -130,7 +130,7 @@ export default function AdminSettingsPage() {
         }
       />
 
-      <Accordion type="multiple" defaultValue={["general", "notifications"]} className="w-full space-y-4">
+      <Accordion type="multiple" defaultValue={["general"]} className="w-full space-y-4">
         <AccordionItem value="general">
           <Card className="shadow-md border-border">
             <AccordionTrigger className="p-6 hover:no-underline w-full">
