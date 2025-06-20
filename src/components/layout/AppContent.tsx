@@ -22,8 +22,6 @@ import {
   Sheet,
   SheetContent, // This is the actual DialogPrimitive.Content from ui/sheet
   SheetTrigger,
-  SheetHeader as ShadSheetHeader, // Aliased import from ui/sheet
-  SheetTitle as ShadSheetTitle     // Aliased import from ui/sheet
 } from '@/components/ui/sheet';
 import { Menu, Settings, LogOut } from 'lucide-react';
 import { getNavLinks, type NavLink as NavLinkType } from '@/lib/navigation';
@@ -135,12 +133,11 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="p-0 w-[var(--sidebar-width-mobile,280px)] flex flex-col bg-sidebar">
-                  {/* Accessible Title for the Sheet (Dialog) */}
-                  <ShadSheetHeader className="sr-only"> {/* Visually hidden header from ui/sheet */}
-                    <ShadSheetTitle>Main Navigation Menu</ShadSheetTitle> {/* Accessible title from ui/sheet */}
-                  </ShadSheetHeader>
-
+                <SheetContent
+                  side="left"
+                  className="p-0 w-[var(--sidebar-width-mobile,280px)] flex flex-col bg-sidebar"
+                  aria-label="Main Navigation Menu" // Added aria-label for accessibility
+                >
                    {/* Visual Header with Logo (uses custom SidebarHeader component from ui/sidebar) */}
                    <SidebarHeader className="p-4 flex items-center justify-start border-b border-sidebar-border">
                       <Link href="/" className="flex items-center gap-2">
@@ -194,3 +191,4 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     </TooltipProvider>
   );
 }
+
