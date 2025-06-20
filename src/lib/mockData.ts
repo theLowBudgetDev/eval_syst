@@ -71,8 +71,8 @@ export const mockAttendanceRecords: AttendanceRecord[] = mockEmployees.flatMap(e
       id: `att-${emp.id}-${i}`,
       employeeId: emp.id,
       date: date.toISOString().split('T')[0],
-      status: attendanceStatuses[Math.floor(Math.random() * attendanceStatuses.length)],
-      notes: Math.random() > 0.8 ? 'Late due to traffic' : undefined
+      status: attendanceStatuses[i % attendanceStatuses.length], // Changed to be deterministic
+      notes: (i % 4 === 0) ? 'Generated note' : undefined // Example deterministic note
     };
   })
 );
