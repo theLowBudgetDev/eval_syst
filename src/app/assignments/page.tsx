@@ -32,11 +32,12 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import type { AppUser } from "@/types"; 
-import { UserPlus, UserCheck, Edit, Search } from "lucide-react";
+import type { AppUser } from "@/types";
+import { UserPlus, UserCheck, Edit, Search, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const NO_SUPERVISOR_VALUE = "--NONE--";
 
@@ -49,8 +50,9 @@ export default function SupervisorAssignmentsPage() {
   const [isLoadingData, setIsLoadingData] = React.useState(true);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = React.useState(false);
   const [selectedEmployee, setSelectedEmployee] = React.useState<AppUser | null>(null);
-  const [selectedSupervisorId, setSelectedSupervisorId] = React.useState<string | null | undefined>(undefined); // Can be null
+  const [selectedSupervisorId, setSelectedSupervisorId] = React.useState<string | null | undefined>(undefined);
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
   const { toast } = useToast();
 
   const fetchData = React.useCallback(async () => {
@@ -61,16 +63,24 @@ export default function SupervisorAssignmentsPage() {
         fetch("/api/supervisors"),
       ]);
 
-      if (!employeesRes.ok) throw new Error("Failed to fetch employees");
+      if (!employeesRes.ok) {
+        const errorBody = await employeesRes.json().catch(() => ({ message: `Failed to fetch employees (status ${employeesRes.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to fetch employees (status ${employeesRes.status})`);
+      }
       const employeesData = await employeesRes.json();
       setEmployees(employeesData);
 
-      if (!supervisorsRes.ok) throw new Error("Failed to fetch supervisors");
+      if (!supervisorsRes.ok) {
+        const errorBody = await supervisorsRes.json().catch(() => ({ message: `Failed to fetch supervisors (status ${supervisorsRes.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to fetch supervisors (status ${supervisorsRes.status})`);
+      }
       const supervisorsData = await supervisorsRes.json();
       setSupervisors(supervisorsData);
 
     } catch (error) {
-      toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "Error Fetching Data", description: (error as Error).message, variant: "destructive" });
+      setEmployees([]);
+      setSupervisors([]);
     } finally {
       setIsLoadingData(false);
     }
@@ -79,7 +89,7 @@ export default function SupervisorAssignmentsPage() {
   React.useEffect(() => {
     if (!authIsLoading && user) {
       if (user.role !== 'ADMIN') {
-        router.push('/login'); 
+        router.push('/login');
       } else {
         fetchData();
       }
@@ -88,21 +98,15 @@ export default function SupervisorAssignmentsPage() {
     }
   }, [user, authIsLoading, router, fetchData]);
 
-  if (authIsLoading || isLoadingData) {
-    return <div className="flex justify-center items-center h-screen">Loading assignments...</div>;
-  }
-  if (!user || user.role !== 'ADMIN') {
-    return <div className="flex justify-center items-center h-screen">Unauthorized access.</div>;
-  }
-
   const handleOpenAssignDialog = (employee: AppUser) => {
     setSelectedEmployee(employee);
-    setSelectedSupervisorId(employee.supervisorId); 
+    setSelectedSupervisorId(employee.supervisorId);
     setIsAssignDialogOpen(true);
   };
 
   const handleAssignSupervisor = async () => {
     if (!selectedEmployee) return;
+    setIsSubmitting(true);
 
     const supervisorIdToAssign = selectedSupervisorId === NO_SUPERVISOR_VALUE || selectedSupervisorId === "" ? null : selectedSupervisorId;
 
@@ -113,29 +117,48 @@ export default function SupervisorAssignmentsPage() {
         body: JSON.stringify({ employeeId: selectedEmployee.id, supervisorId: supervisorIdToAssign }),
       });
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Failed to update assignment");
+        const errorBody = await res.json().catch(() => ({ message: `Failed to update assignment (status ${res.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to update assignment (status ${res.status})`);
       }
-      const updatedEmployee = await res.json();
-      setEmployees(prev => prev.map(emp => emp.id === updatedEmployee.id ? updatedEmployee : emp));
+      // const updatedEmployee = await res.json(); // The API returns the employee, we can use this to update state more precisely if needed.
       toast({
         title: "Assignment Updated",
-        description: `${selectedEmployee.name}'s supervisor has been updated.`,
+        description: `${selectedEmployee.name}'s supervisor has been updated. Refreshing data...`,
       });
+      fetchData(); // Re-fetch all data to ensure consistency
     } catch (error) {
-      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "Error Updating Assignment", description: (error as Error).message, variant: "destructive" });
     } finally {
+      setIsSubmitting(false);
       setIsAssignDialogOpen(false);
       setSelectedEmployee(null);
       setSelectedSupervisorId(undefined);
     }
   };
-  
-  const filteredEmployees = employees.filter(emp => 
+
+  const filteredEmployees = employees.filter(emp =>
     emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (emp.supervisor?.name && emp.supervisor.name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  if (authIsLoading || (isLoadingData && employees.length === 0)) { // Show skeleton if still loading initial data
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Supervisor Assignments" description="Assign and manage supervisors for employees."/>
+        <Skeleton className="h-10 w-1/3 mb-4" />
+        <Card className="shadow-lg rounded-lg overflow-hidden">
+           <div className="p-4 space-y-2">
+            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+           </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!user || user.role !== 'ADMIN') {
+    return <div className="flex justify-center items-center h-screen">Unauthorized access.</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -160,7 +183,7 @@ export default function SupervisorAssignmentsPage() {
         />
       </div>
 
-      <Card className="shadow-lg rounded-lg overflow-hidden">
+      <Card className="shadow-lg rounded-lg overflow-hidden border-border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -172,7 +195,14 @@ export default function SupervisorAssignmentsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredEmployees.length > 0 ? (
+            {isLoadingData && filteredEmployees.length === 0 ? (
+                <TableRow>
+                    <TableCell colSpan={5} className="h-24 text-center">
+                      <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                      <p className="text-muted-foreground">Loading assignments...</p>
+                    </TableCell>
+                </TableRow>
+            ) : filteredEmployees.length > 0 ? (
               filteredEmployees.map((employee) => (
               <TableRow key={employee.id}>
                 <TableCell className="font-medium">{employee.name}</TableCell>
@@ -190,7 +220,7 @@ export default function SupervisorAssignmentsPage() {
                 </TableCell>
                 <TableCell className="text-right">
                   <Button variant="outline" size="sm" onClick={() => handleOpenAssignDialog(employee)}>
-                    <Edit className="mr-2 h-4 w-4" /> 
+                    <Edit className="mr-2 h-4 w-4" />
                     {employee.supervisorId ? "Change" : "Assign"} Supervisor
                   </Button>
                 </TableCell>
@@ -199,7 +229,7 @@ export default function SupervisorAssignmentsPage() {
           ) : (
             <TableRow>
                 <TableCell colSpan={5} className="h-24 text-center">
-                  No employees found.
+                  No employees found matching your search.
                 </TableCell>
               </TableRow>
           )}
@@ -223,6 +253,7 @@ export default function SupervisorAssignmentsPage() {
                 onValueChange={(value) => {
                   setSelectedSupervisorId(value === NO_SUPERVISOR_VALUE ? null : value);
                 }}
+                disabled={isSubmitting}
               >
                 <SelectTrigger id="supervisor">
                   <SelectValue placeholder="Select a supervisor" />
@@ -241,9 +272,12 @@ export default function SupervisorAssignmentsPage() {
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button variant="outline" disabled={isSubmitting}>Cancel</Button>
               </DialogClose>
-              <Button onClick={handleAssignSupervisor}>Save Assignment</Button>
+              <Button onClick={handleAssignSupervisor} disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Assignment
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -251,5 +285,3 @@ export default function SupervisorAssignmentsPage() {
     </div>
   );
 }
-
-    

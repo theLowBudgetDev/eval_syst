@@ -16,7 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import type { AutoMessageTrigger, MessageEventType } from "@/types";
-import { PlusCircle, Edit, Trash2, BellRing, MessageSquareText } from "lucide-react";
+import { PlusCircle, Edit, Trash2, BellRing, MessageSquareText, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
@@ -38,6 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const MESSAGE_EVENT_TYPES: MessageEventType[] = [
   "DEADLINE_APPROACHING",
@@ -61,6 +62,9 @@ export default function AutoMessagingPage() {
 
   const [triggers, setTriggers] = React.useState<AutoMessageTrigger[]>([]);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
+  const [isSubmitting, setIsSubmitting] = React.useState(false); // For form submission
+  const [isDeleting, setIsDeleting] = React.useState(false); // For deletion
+
 
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editingTrigger, setEditingTrigger] = React.useState<AutoMessageTrigger | null>(null);
@@ -78,10 +82,14 @@ export default function AutoMessagingPage() {
     setIsLoadingData(true);
     try {
       const res = await fetch("/api/auto-message-triggers");
-      if (!res.ok) throw new Error("Failed to fetch auto message triggers");
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => ({ message: `Failed to fetch triggers (status ${res.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to fetch triggers (status ${res.status})`);
+      }
       setTriggers(await res.json());
     } catch (error) {
-      toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "Error Fetching Data", description: (error as Error).message, variant: "destructive" });
+      setTriggers([]);
     } finally {
       setIsLoadingData(false);
     }
@@ -90,7 +98,7 @@ export default function AutoMessagingPage() {
   React.useEffect(() => {
     if (!authIsLoading && user) {
       if (user.role !== 'ADMIN') {
-        router.push('/login'); 
+        router.push('/login');
       } else {
         fetchData();
       }
@@ -99,24 +107,26 @@ export default function AutoMessagingPage() {
     }
   }, [user, authIsLoading, router, fetchData]);
 
-
-  if (authIsLoading || isLoadingData || !user || user.role !== 'ADMIN') {
-    return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
-  }
-  
   const handleToggleActive = async (trigger: AutoMessageTrigger) => {
     const updatedTrigger = { ...trigger, isActive: !trigger.isActive };
+    // Optimistically update UI
+    setTriggers(prev => prev.map(t => t.id === trigger.id ? updatedTrigger : t));
     try {
       const res = await fetch(`/api/auto-message-triggers/${trigger.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: updatedTrigger.isActive }),
       });
-      if (!res.ok) throw new Error("Failed to update trigger status");
-      setTriggers(prev => prev.map(t => t.id === trigger.id ? updatedTrigger : t));
+      if (!res.ok) {
+        // Revert optimistic update on error
+        setTriggers(prev => prev.map(t => t.id === trigger.id ? trigger : t));
+        const errorBody = await res.json().catch(() => ({ message: `Failed to update trigger (status ${res.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to update trigger (status ${res.status})`);
+      }
       toast({ title: `Trigger ${updatedTrigger.isActive ? "Activated" : "Deactivated"}` });
+      // No need to re-fetch if only status changed and API confirmed
     } catch (error) {
-      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "Error Updating Trigger", description: (error as Error).message, variant: "destructive" });
     }
   };
 
@@ -137,21 +147,27 @@ export default function AutoMessagingPage() {
   };
 
   const handleFormSubmit = async () => {
+    setIsSubmitting(true);
     const method = editingTrigger ? 'PUT' : 'POST';
     const url = editingTrigger ? `/api/auto-message-triggers/${editingTrigger.id}` : '/api/auto-message-triggers';
     const payload = { ...formData, daysBeforeEvent: formData.daysBeforeEvent ? Number(formData.daysBeforeEvent) : null };
 
     try {
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to save trigger'); }
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => ({ message: `Failed to save trigger (status ${res.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to save trigger (status ${res.status})`);
+      }
       toast({ title: `Trigger ${editingTrigger ? 'Updated' : 'Added'}` });
       fetchData();
       setIsFormOpen(false);
     } catch (error) {
-      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "Error Saving Trigger", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
     }
   };
-  
+
   const handleDeleteRequest = (trigger: AutoMessageTrigger) => {
     setTriggerToDelete(trigger);
     setShowDeleteConfirm(true);
@@ -159,18 +175,36 @@ export default function AutoMessagingPage() {
 
   const confirmDelete = async () => {
     if (!triggerToDelete) return;
+    setIsDeleting(true);
     try {
       const res = await fetch(`/api/auto-message-triggers/${triggerToDelete.id}`, { method: 'DELETE' });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to delete trigger'); }
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => ({ message: `Failed to delete trigger (status ${res.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to delete trigger (status ${res.status})`);
+      }
       toast({ title: "Trigger Deleted" });
       fetchData();
     } catch (error) {
-      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "Error Deleting Trigger", description: (error as Error).message, variant: "destructive" });
     } finally {
+      setIsDeleting(false);
       setShowDeleteConfirm(false);
       setTriggerToDelete(null);
     }
   };
+  
+  if (authIsLoading || !user || user.role !== 'ADMIN') {
+    return (
+       <div className="space-y-6">
+        <PageHeader title="Auto Messaging Configuration" description="Set up and manage automated messages for platform events."/>
+        <Card className="shadow-lg border-border">
+            <CardHeader><Skeleton className="h-8 w-3/4" /></CardHeader>
+            <CardContent><Skeleton className="h-40 w-full" /></CardContent>
+        </Card>
+      </div>
+    );
+  }
+
 
   return (
     <div className="space-y-6">
@@ -178,13 +212,13 @@ export default function AutoMessagingPage() {
         title="Auto Messaging Configuration"
         description="Set up and manage automated messages for platform events."
         actions={
-          <Button onClick={() => handleOpenForm()}>
+          <Button onClick={() => handleOpenForm()} disabled={isSubmitting}>
             <PlusCircle className="mr-2 h-4 w-4" /> Add New Trigger
           </Button>
         }
       />
 
-      <Card className="shadow-lg">
+      <Card className="shadow-lg border-border">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><BellRing className="h-5 w-5 text-primary"/> Automated Message Triggers</CardTitle>
           <CardDescription>
@@ -192,6 +226,15 @@ export default function AutoMessagingPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {isLoadingData ? (
+             Array.from({length:3}).map((_, index) => (
+                <div key={index} className="flex items-center space-x-4 p-4 border-b">
+                    <Skeleton className="h-8 w-1/4" />
+                    <Skeleton className="h-8 w-1/2" />
+                    <Skeleton className="h-8 w-1/4" />
+                </div>
+             ))
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -208,7 +251,7 @@ export default function AutoMessagingPage() {
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-2">
                         <MessageSquareText className="h-4 w-4 text-muted-foreground"/>
-                        {trigger.eventName.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                        {trigger.eventName.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')}
                     </div>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground truncate max-w-xs">
@@ -228,10 +271,10 @@ export default function AutoMessagingPage() {
                      </Badge>
                   </TableCell>
                   <TableCell className="text-right space-x-2">
-                    <Button variant="outline" size="icon" onClick={() => handleOpenForm(trigger)}>
+                    <Button variant="outline" size="icon" onClick={() => handleOpenForm(trigger)} disabled={isSubmitting}>
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="destructive" size="icon" onClick={() => handleDeleteRequest(trigger)}>
+                    <Button variant="destructive" size="icon" onClick={() => handleDeleteRequest(trigger)} disabled={isDeleting}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>
@@ -245,6 +288,7 @@ export default function AutoMessagingPage() {
               )}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -254,12 +298,13 @@ export default function AutoMessagingPage() {
             <DialogHeader>
               <DialogTitle>{editingTrigger ? "Edit" : "Add"} Auto Message Trigger</DialogTitle>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
                 <div className="space-y-1">
                     <Label htmlFor="trigger-event">Event Name</Label>
-                    <Select 
-                        value={formData.eventName} 
+                    <Select
+                        value={formData.eventName}
                         onValueChange={(value) => setFormData({...formData, eventName: value as MessageEventType})}
+                        disabled={isSubmitting}
                     >
                         <SelectTrigger id="trigger-event"><SelectValue placeholder="Select event type" /></SelectTrigger>
                         <SelectContent>
@@ -273,21 +318,24 @@ export default function AutoMessagingPage() {
                 </div>
                 <div className="space-y-1">
                     <Label htmlFor="trigger-template">Message Template</Label>
-                    <Textarea id="trigger-template" value={formData.messageTemplate} onChange={e => setFormData({...formData, messageTemplate: e.target.value})} placeholder="e.g., Hi {{employeeName}}, your review is due on {{reviewDate}}." />
+                    <Textarea id="trigger-template" value={formData.messageTemplate} onChange={e => setFormData({...formData, messageTemplate: e.target.value})} placeholder="e.g., Hi {{employeeName}}, your review is due on {{reviewDate}}." disabled={isSubmitting}/>
                     <p className="text-xs text-muted-foreground">Available placeholders: {{employeeName}}, {{supervisorName}}, {{deadlineDate}}, etc. (Context-dependent)</p>
                 </div>
                  <div className="space-y-1">
                     <Label htmlFor="trigger-days">Days Before Event (Optional)</Label>
-                    <Input id="trigger-days" type="number" value={formData.daysBeforeEvent ?? ""} onChange={e => setFormData({...formData, daysBeforeEvent: e.target.value ? parseInt(e.target.value) : null})} />
+                    <Input id="trigger-days" type="number" value={formData.daysBeforeEvent ?? ""} onChange={e => setFormData({...formData, daysBeforeEvent: e.target.value ? parseInt(e.target.value) : null})} disabled={isSubmitting}/>
                 </div>
                 <div className="flex items-center space-x-2">
-                    <Switch id="trigger-active" checked={formData.isActive} onCheckedChange={checked => setFormData({...formData, isActive: checked})} />
+                    <Switch id="trigger-active" checked={formData.isActive} onCheckedChange={checked => setFormData({...formData, isActive: checked})} disabled={isSubmitting}/>
                     <Label htmlFor="trigger-active">Active</Label>
                 </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button>
-              <Button onClick={handleFormSubmit}>Save Trigger</Button>
+              <Button variant="outline" onClick={() => setIsFormOpen(false)} disabled={isSubmitting}>Cancel</Button>
+              <Button onClick={handleFormSubmit} disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Trigger
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -299,12 +347,15 @@ export default function AutoMessagingPage() {
                 <DialogHeader>
                     <DialogTitle>Confirm Deletion</DialogTitle>
                     <DialogDescription>
-                        Are you sure you want to delete the trigger for "{triggerToDelete.eventName.replace(/_/g, ' ')}"? This cannot be undone.
+                        Are you sure you want to delete the trigger for "<strong>{triggerToDelete.eventName.replace(/_/g, ' ')}</strong>"? This cannot be undone.
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
-                    <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
+                    <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} disabled={isDeleting}>Cancel</Button>
+                    <Button variant="destructive" onClick={confirmDelete} disabled={isDeleting}>
+                        {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Delete
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -313,5 +364,3 @@ export default function AutoMessagingPage() {
     </div>
   );
 }
-
-    

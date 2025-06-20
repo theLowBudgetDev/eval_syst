@@ -20,7 +20,6 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -52,7 +51,7 @@ export default function EmployeesPage() {
   const [employeeToDelete, setEmployeeToDelete] = React.useState<AppUser | null>(null);
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [isSubmittingForm, setIsSubmittingForm] = React.useState(false);
-  
+
   const [isDetailDialogOpen, setIsDetailDialogOpen] = React.useState(false);
   const [viewingEmployee, setViewingEmployee] = React.useState<AppUser | null>(null);
   const { toast } = useToast();
@@ -62,17 +61,17 @@ export default function EmployeesPage() {
     try {
       const usersRes = await fetch("/api/users");
       if (!usersRes.ok) {
-        const errorData = await usersRes.json().catch(() => ({ message: "Failed to fetch users" }));
-        throw new Error(errorData.message);
+        const errorBody = await usersRes.json().catch(() => ({ message: `Failed to fetch users (status ${usersRes.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to fetch users (status ${usersRes.status})`);
       }
       const usersData = await usersRes.json();
       setEmployees(usersData);
 
-      if(user?.role === 'ADMIN') { 
+      if(user?.role === 'ADMIN') {
         const supervisorsRes = await fetch("/api/supervisors");
         if (!supervisorsRes.ok) {
-            const errorData = await supervisorsRes.json().catch(() => ({ message: "Failed to fetch supervisors" }));
-            throw new Error(errorData.message);
+            const errorBody = await supervisorsRes.json().catch(() => ({ message: `Failed to fetch supervisors (status ${supervisorsRes.status}, non-JSON response)` }));
+            throw new Error(errorBody.error || errorBody.message || `Failed to fetch supervisors (status ${supervisorsRes.status})`);
         }
         setSupervisorsForForm(await supervisorsRes.json());
       }
@@ -103,7 +102,7 @@ export default function EmployeesPage() {
     if (user?.role === 'SUPERVISOR') {
       displayEmployees = employees.filter(emp => emp.supervisorId === user.id || emp.id === user.id);
     }
-    
+
     return displayEmployees.filter(
       (employee) =>
         employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -112,7 +111,7 @@ export default function EmployeesPage() {
         (employee.position && employee.position.toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [employees, searchTerm, user]);
-  
+
   const canPerformAdminActions = user?.role === 'ADMIN';
 
   const handleAddEmployee = () => {
@@ -132,7 +131,7 @@ export default function EmployeesPage() {
     setEditingEmployee(employee);
     setIsFormOpen(true);
   };
-  
+
   const handleDeleteEmployee = (employee: AppUser) => {
     if (!canPerformAdminActions) {
         toast({ title: "Permission Denied", description: "Only administrators can delete employees.", variant: "destructive" });
@@ -148,11 +147,11 @@ export default function EmployeesPage() {
     try {
       const res = await fetch(`/api/users/${employeeToDelete.id}`, { method: 'DELETE' });
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ message: "Failed to delete employee" }));
-        throw new Error(errorData.message);
+        const errorBody = await res.json().catch(() => ({ message: `Failed to delete employee (status ${res.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to delete employee (status ${res.status})`);
       }
       toast({ title: "Employee Deleted", description: `${employeeToDelete.name} has been removed.` });
-      fetchData(); 
+      fetchData();
       setSelectedEmployeeIds(prev => {
         const newSet = new Set(prev);
         if(employeeToDelete) newSet.delete(employeeToDelete.id);
@@ -181,9 +180,9 @@ export default function EmployeesPage() {
     setIsSubmittingForm(true);
     const method = isEditing ? 'PUT' : 'POST';
     const url = isEditing ? `/api/users/${employeeData.id}` : '/api/users';
-    
+
     const payload = { ...employeeData, hireDate: employeeData.hireDate.split('T')[0] };
-    if (!isEditing) { 
+    if (!isEditing) {
       delete (payload as any).id;
     }
 
@@ -194,11 +193,11 @@ export default function EmployeesPage() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ message: `Failed to ${isEditing ? 'update' : 'add'} employee` }));
-        throw new Error(errorData.message);
+        const errorBody = await res.json().catch(() => ({ message: `Failed to ${isEditing ? 'update' : 'add'} employee (status ${res.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to ${isEditing ? 'update' : 'add'} employee (status ${res.status})`);
       }
       toast({ title: `Employee ${isEditing ? 'Updated' : 'Added'}`, description: `${employeeData.name}'s details have been saved.`});
-      fetchData(); 
+      fetchData();
       setIsFormOpen(false);
     } catch (error) {
       toast({ title: `Error ${isEditing ? 'Updating' : 'Adding'} Employee`, description: (error as Error).message, variant: "destructive" });
@@ -227,13 +226,13 @@ export default function EmployeesPage() {
     }
     setSelectedEmployeeIds(newSelectedIds);
   };
-  
+
   const handleDeleteSelected = async () => {
     if (!canPerformAdminActions || selectedEmployeeIds.size === 0) {
         toast({ title: "Action Not Allowed", description: "You do not have permission or no employees selected.", variant: "destructive" });
         return;
     }
-    
+
     setIsDeleting(true);
     let deletedCount = 0;
     let errorMessages: string[] = [];
@@ -242,8 +241,8 @@ export default function EmployeesPage() {
         try {
             const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
             if (!res.ok) {
-                 const errorData = await res.json().catch(() => ({ message: `Failed to delete employee ID ${id}` }));
-                 throw new Error(errorData.message);
+                 const errorBody = await res.json().catch(() => ({ message: `Failed to delete employee ID ${id} (status ${res.status}, non-JSON response)` }));
+                 throw new Error(errorBody.error || errorBody.message || `Failed to delete employee ID ${id} (status ${res.status})`);
             }
             deletedCount++;
         } catch (error) {
@@ -261,8 +260,8 @@ export default function EmployeesPage() {
     if (deletedCount === 0 && errorMessages.length === 0){
         toast({ title: "No Employees Deleted", description: "No action was performed.", variant: "default" });
     }
-    
-    fetchData(); 
+
+    fetchData();
     setSelectedEmployeeIds(new Set());
   };
 
@@ -315,7 +314,7 @@ export default function EmployeesPage() {
         </Button>
         {canPerformAdminActions && selectedEmployeeIds.size > 0 && (
            <Button variant="destructive" onClick={handleDeleteSelected} disabled={isDeleting || isLoadingData}>
-             {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />} 
+             {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
              Delete ({selectedEmployeeIds.size})
            </Button>
         )}
@@ -327,7 +326,7 @@ export default function EmployeesPage() {
             <TableRow>
               {canPerformAdminActions && (
                 <TableHead className="w-[50px]">
-                   <Checkbox 
+                   <Checkbox
                       checked={isAllSelected || (isIndeterminate ? 'indeterminate' : false)}
                       onCheckedChange={handleSelectAll}
                       aria-label="Select all rows"
@@ -365,7 +364,7 @@ export default function EmployeesPage() {
                 <TableRow key={employee.id} data-state={selectedEmployeeIds.has(employee.id) ? "selected" : ""}>
                   {canPerformAdminActions && (
                     <TableCell>
-                      <Checkbox 
+                      <Checkbox
                         checked={selectedEmployeeIds.has(employee.id)}
                         onCheckedChange={(checked) => handleSelectRow(employee.id, !!checked)}
                         aria-label={`Select row for ${employee.name}`}
@@ -427,7 +426,7 @@ export default function EmployeesPage() {
           </TableBody>
         </Table>
       </Card>
-      
+
       {isFormOpen && (user?.role === 'ADMIN' || (editingEmployee && editingEmployee.id === user?.id)) && (
         <EmployeeForm
           isOpen={isFormOpen}
@@ -447,6 +446,9 @@ export default function EmployeesPage() {
               <DialogTitle>Confirm Deletion</DialogTitle>
               <DialogDescription>
                 Are you sure you want to delete employee: <strong>{employeeToDelete?.name}</strong>? This action cannot be undone and may affect related records.
+                 {employeeToDelete.role === 'SUPERVISOR' && employeeToDelete.supervisedEmployees && employeeToDelete.supervisedEmployees.length > 0 &&
+                    <span className="block mt-2 text-destructive/90">This user supervises {employeeToDelete.supervisedEmployees.length} employee(s). Please reassign them first.</span>
+                 }
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -512,5 +514,3 @@ export default function EmployeesPage() {
     </div>
   );
 }
-
-    

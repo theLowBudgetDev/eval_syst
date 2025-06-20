@@ -16,7 +16,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { EvaluationCriteria, PerformanceScore, AppUser } from "@/types";
-import { PlusCircle, Edit, Trash2, Eye, ListChecks, Star } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Eye, ListChecks, Star, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
@@ -33,6 +33,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 
 interface CriteriaFormData {
@@ -57,18 +59,21 @@ export default function EvaluationsPage() {
 
   const [criteria, setCriteria] = React.useState<EvaluationCriteria[]>([]);
   const [scores, setScores] = React.useState<PerformanceScore[]>([]);
-  const [employees, setEmployees] = React.useState<AppUser[]>([]); // For review form dropdown
+  const [employees, setEmployees] = React.useState<AppUser[]>([]);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
 
   const [isCriteriaFormOpen, setIsCriteriaFormOpen] = React.useState(false);
   const [editingCriteria, setEditingCriteria] = React.useState<EvaluationCriteria | null>(null);
   const [criteriaFormData, setCriteriaFormData] = React.useState<CriteriaFormData>({ name: '', description: '', weight: null });
+  const [isSubmittingCriteria, setIsSubmittingCriteria] = React.useState(false);
 
   const [isReviewFormOpen, setIsReviewFormOpen] = React.useState(false);
   const [reviewFormData, setReviewFormData] = React.useState<ReviewFormData>({ employeeId: '', criteriaId: '', score: 3, evaluationDate: format(new Date(), 'yyyy-MM-dd'), comments: '' });
-  
+  const [isSubmittingReview, setIsSubmittingReview] = React.useState(false);
+
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
-  const [itemToDelete, setItemToDelete] = React.useState<{id: string, type: 'criteria' | 'score'} | null>(null);
+  const [itemToDelete, setItemToDelete] = React.useState<{id: string, type: 'criteria' | 'score', name?: string} | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
 
   const fetchData = React.useCallback(async () => {
@@ -77,20 +82,30 @@ export default function EvaluationsPage() {
       const [criteriaRes, scoresRes, employeesRes] = await Promise.all([
         fetch("/api/evaluation-criteria"),
         fetch("/api/performance-scores"),
-        fetch("/api/users"), // Fetch users for names in scores and form
+        fetch("/api/users"),
       ]);
 
-      if (!criteriaRes.ok) throw new Error("Failed to fetch evaluation criteria");
+      if (!criteriaRes.ok) {
+        const errorBody = await criteriaRes.json().catch(() => ({ message: `Failed to fetch criteria (status ${criteriaRes.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to fetch criteria (status ${criteriaRes.status})`);
+      }
       setCriteria(await criteriaRes.json());
 
-      if (!scoresRes.ok) throw new Error("Failed to fetch performance scores");
+      if (!scoresRes.ok) {
+        const errorBody = await scoresRes.json().catch(() => ({ message: `Failed to fetch scores (status ${scoresRes.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to fetch scores (status ${scoresRes.status})`);
+      }
       setScores(await scoresRes.json());
 
-      if (!employeesRes.ok) throw new Error("Failed to fetch employees");
+      if (!employeesRes.ok) {
+        const errorBody = await employeesRes.json().catch(() => ({ message: `Failed to fetch employees (status ${employeesRes.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to fetch employees (status ${employeesRes.status})`);
+      }
       setEmployees(await employeesRes.json());
 
     } catch (error) {
-      toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "Error Fetching Data", description: (error as Error).message, variant: "destructive" });
+      setCriteria([]); setScores([]); setEmployees([]);
     } finally {
       setIsLoadingData(false);
     }
@@ -118,19 +133,21 @@ export default function EvaluationsPage() {
       const supervisedEmployeeIds = employees.filter(emp => emp.supervisorId === user.id).map(emp => emp.id);
       return scores.filter(score => supervisedEmployeeIds.includes(score.employeeId) || score.evaluatorId === user.id);
     }
-    return scores; // Admin sees all
+    return scores;
   }, [scores, user, employees]);
 
 
-  if (authIsLoading || isLoadingData || !user || (user.role !== 'ADMIN' && user.role !== 'SUPERVISOR')) {
-    return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
-  }
+  const canPerformWriteActions = user?.role === 'ADMIN';
 
-  const canPerformWriteActions = user.role === 'ADMIN';
-
-  // Criteria Handlers
   const handleOpenCriteriaForm = (crit: EvaluationCriteria | null = null) => {
-    if (!canPerformWriteActions && crit) return; // Supervisors cannot edit existing global criteria
+    if (!canPerformWriteActions && crit) {
+      toast({ title: "Permission Denied", description: "Only administrators can edit global evaluation criteria.", variant: "destructive"});
+      return;
+    }
+    if (!canPerformWriteActions && !crit) {
+      toast({ title: "Permission Denied", description: "Only administrators can add new evaluation criteria.", variant: "destructive"});
+      return;
+    }
     if (crit) {
       setEditingCriteria(crit);
       setCriteriaFormData({ name: crit.name, description: crit.description, weight: crit.weight });
@@ -143,80 +160,112 @@ export default function EvaluationsPage() {
 
   const handleCriteriaFormSubmit = async () => {
     if (!canPerformWriteActions) return;
+    setIsSubmittingCriteria(true);
     const method = editingCriteria ? 'PUT' : 'POST';
     const url = editingCriteria ? `/api/evaluation-criteria/${editingCriteria.id}` : '/api/evaluation-criteria';
     const payload = { ...criteriaFormData, weight: criteriaFormData.weight ? Number(criteriaFormData.weight) : null };
     try {
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to save criteria'); }
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => ({ message: `Failed to save criteria (status ${res.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to save criteria (status ${res.status})`);
+      }
       toast({ title: `Criteria ${editingCriteria ? 'Updated' : 'Added'}` });
       fetchData();
       setIsCriteriaFormOpen(false);
     } catch (error) {
-      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "Error Saving Criteria", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setIsSubmittingCriteria(false);
     }
   };
-  
-  const handleDeleteRequest = (id: string, type: 'criteria' | 'score') => {
-    if (type === 'criteria' && !canPerformWriteActions) return;
-    if (type === 'score' && !canPerformWriteActions && scores.find(s => s.id === id)?.evaluatorId !== user.id) return;
-    setItemToDelete({ id, type });
+
+  const handleDeleteRequest = (id: string, type: 'criteria' | 'score', name?: string) => {
+    if (type === 'criteria' && !canPerformWriteActions) {
+       toast({ title: "Permission Denied", description: "Only administrators can delete criteria.", variant: "destructive"});
+       return;
+    }
+    const scoreItem = type === 'score' ? scores.find(s => s.id === id) : null;
+    if (type === 'score' && scoreItem && !canPerformWriteActions && scoreItem.evaluatorId !== user?.id) {
+       toast({ title: "Permission Denied", description: "You can only delete reviews you conducted.", variant: "destructive"});
+       return;
+    }
+    setItemToDelete({ id, type, name });
     setShowDeleteConfirm(true);
   };
 
   const confirmDelete = async () => {
     if (!itemToDelete) return;
+    setIsDeleting(true);
     const { id, type } = itemToDelete;
     const url = type === 'criteria' ? `/api/evaluation-criteria/${id}` : `/api/performance-scores/${id}`;
     try {
       const res = await fetch(url, { method: 'DELETE' });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.message || `Failed to delete ${type}`); }
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => ({ message: `Failed to delete ${type} (status ${res.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to delete ${type} (status ${res.status})`);
+      }
       toast({ title: `${type.charAt(0).toUpperCase() + type.slice(1)} Deleted` });
       fetchData();
     } catch (error) {
-      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+      toast({ title: `Error Deleting ${type}`, description: (error as Error).message, variant: "destructive" });
     } finally {
+      setIsDeleting(false);
       setShowDeleteConfirm(false);
       setItemToDelete(null);
     }
   };
-  
-  // Review Handlers
-  const handleOpenReviewForm = (score: PerformanceScore | null = null) => {
-     // Admin can edit any. Supervisor can edit scores they gave.
-    if (score && !canPerformWriteActions && score.evaluatorId !== user?.id) {
-        toast({ title: "Permission Denied", description: "You can only edit reviews you conducted.", variant: "destructive"});
-        return;
-    }
-    // For now, we are only supporting creating new reviews via the UI. Editing existing scores via form is complex.
-    // So, we'll always open form for new review
+
+  const handleOpenReviewForm = () => {
     setReviewFormData({ employeeId: '', criteriaId: '', score: 3, evaluationDate: format(new Date(), 'yyyy-MM-dd'), comments: '' });
     setIsReviewFormOpen(true);
   };
-  
+
   const handleReviewFormSubmit = async () => {
     if (!user) return;
-    const payload = { 
-      ...reviewFormData, 
-      score: Number(reviewFormData.score), 
-      evaluatorId: user.id, 
-      evaluationDate: new Date(reviewFormData.evaluationDate).toISOString() 
+    if (!reviewFormData.employeeId || !reviewFormData.criteriaId) {
+        toast({ title: "Missing Fields", description: "Please select an employee and criteria.", variant: "destructive" });
+        return;
+    }
+    setIsSubmittingReview(true);
+    const payload = {
+      ...reviewFormData,
+      score: Number(reviewFormData.score),
+      evaluatorId: user.id,
+      evaluationDate: new Date(reviewFormData.evaluationDate).toISOString()
     };
     try {
       const res = await fetch('/api/performance-scores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to save review'); }
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => ({ message: `Failed to save review (status ${res.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to save review (status ${res.status})`);
+      }
       toast({ title: "Review Added" });
       fetchData();
       setIsReviewFormOpen(false);
     } catch (error) {
-      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "Error Saving Review", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setIsSubmittingReview(false);
     }
   };
 
-  const employeesForSupervisor = user.role === 'SUPERVISOR' 
-    ? employees.filter(e => e.supervisorId === user.id) 
+  const employeesForSupervisorReview = user?.role === 'SUPERVISOR'
+    ? employees.filter(e => e.supervisorId === user.id)
     : employees;
 
+  if (authIsLoading || isLoadingData || !user || (user.role !== 'ADMIN' && user.role !== 'SUPERVISOR')) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Evaluations Management" description="Define evaluation criteria and manage performance reviews."/>
+        <Skeleton className="h-10 w-full md:w-[400px]" />
+        <Card className="shadow-lg">
+          <CardHeader><Skeleton className="h-8 w-1/2" /></CardHeader>
+          <CardContent><Skeleton className="h-40 w-full" /></CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -232,7 +281,7 @@ export default function EvaluationsPage() {
         </TabsList>
 
         <TabsContent value="criteria" className="mt-6">
-          <Card className="shadow-lg">
+          <Card className="shadow-lg border-border">
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div>
@@ -240,7 +289,7 @@ export default function EvaluationsPage() {
                     <CardDescription>Manage the criteria used for employee evaluations.</CardDescription>
                 </div>
                 {canPerformWriteActions && (
-                  <Button onClick={() => handleOpenCriteriaForm()}>
+                  <Button onClick={() => handleOpenCriteriaForm()} disabled={isSubmittingCriteria}>
                       <PlusCircle className="mr-2 h-4 w-4" /> Add New Criterion
                   </Button>
                 )}
@@ -264,10 +313,10 @@ export default function EvaluationsPage() {
                       <TableCell className="text-center">{crit.weight ? `${crit.weight * 100}%` : "N/A"}</TableCell>
                       {canPerformWriteActions && (
                         <TableCell className="text-right space-x-2">
-                          <Button variant="outline" size="icon" onClick={() => handleOpenCriteriaForm(crit)}>
+                          <Button variant="outline" size="icon" onClick={() => handleOpenCriteriaForm(crit)} disabled={isSubmittingCriteria}>
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="destructive" size="icon" onClick={() => handleDeleteRequest(crit.id, 'criteria')}>
+                          <Button variant="destructive" size="icon" onClick={() => handleDeleteRequest(crit.id, 'criteria', crit.name)} disabled={isDeleting}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </TableCell>
@@ -287,7 +336,7 @@ export default function EvaluationsPage() {
         </TabsContent>
 
         <TabsContent value="reviews" className="mt-6">
-          <Card className="shadow-lg">
+          <Card className="shadow-lg border-border">
             <CardHeader>
                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div>
@@ -295,7 +344,7 @@ export default function EvaluationsPage() {
                     <CardDescription>View and manage employee performance reviews.</CardDescription>
                 </div>
                 {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') && (
-                  <Button onClick={() => handleOpenReviewForm()}>
+                  <Button onClick={() => handleOpenReviewForm()} disabled={isSubmittingReview}>
                       <PlusCircle className="mr-2 h-4 w-4" /> Start New Review
                   </Button>
                 )}
@@ -326,11 +375,11 @@ export default function EvaluationsPage() {
                       </TableCell>
                       <TableCell>{getEvaluatorName(score.evaluatorId)}</TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Button variant="outline" size="icon" onClick={() => toast({title: "Review Details", description: score.comments || "No comments for this review."})}>
+                        <Button variant="outline" size="icon" onClick={() => toast({title: `Review: ${getEmployeeName(score.employeeId)}`, description: score.comments || "No comments for this review."})}>
                           <Eye className="h-4 w-4" />
                         </Button>
                          {(user.role === 'ADMIN' || (user.role === 'SUPERVISOR' && score.evaluatorId === user.id)) && (
-                            <Button variant="destructive" size="icon" onClick={() => handleDeleteRequest(score.id, 'score')}>
+                            <Button variant="destructive" size="icon" onClick={() => handleDeleteRequest(score.id, 'score', `${getEmployeeName(score.employeeId)} on ${format(new Date(score.evaluationDate), "PP")}`)} disabled={isDeleting}>
                             <Trash2 className="h-4 w-4" />
                             </Button>
                          )}
@@ -359,72 +408,80 @@ export default function EvaluationsPage() {
             <div className="grid gap-4 py-4">
               <div className="space-y-1">
                 <Label htmlFor="crit-name">Name</Label>
-                <Input id="crit-name" value={criteriaFormData.name} onChange={e => setCriteriaFormData({...criteriaFormData, name: e.target.value})} />
+                <Input id="crit-name" value={criteriaFormData.name} onChange={e => setCriteriaFormData({...criteriaFormData, name: e.target.value})} disabled={isSubmittingCriteria}/>
               </div>
               <div className="space-y-1">
                 <Label htmlFor="crit-desc">Description</Label>
-                <Textarea id="crit-desc" value={criteriaFormData.description} onChange={e => setCriteriaFormData({...criteriaFormData, description: e.target.value})} />
+                <Textarea id="crit-desc" value={criteriaFormData.description} onChange={e => setCriteriaFormData({...criteriaFormData, description: e.target.value})} disabled={isSubmittingCriteria}/>
               </div>
               <div className="space-y-1">
                 <Label htmlFor="crit-weight">Weight (0.0 to 1.0, e.g., 0.2 for 20%)</Label>
-                <Input id="crit-weight" type="number" step="0.01" min="0" max="1" value={criteriaFormData.weight ?? ""} onChange={e => setCriteriaFormData({...criteriaFormData, weight: e.target.value ? parseFloat(e.target.value) : null})} />
+                <Input id="crit-weight" type="number" step="0.01" min="0" max="1" value={criteriaFormData.weight ?? ""} onChange={e => setCriteriaFormData({...criteriaFormData, weight: e.target.value ? parseFloat(e.target.value) : null})} disabled={isSubmittingCriteria}/>
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCriteriaFormOpen(false)}>Cancel</Button>
-              <Button onClick={handleCriteriaFormSubmit}>Save Criterion</Button>
+              <Button variant="outline" onClick={() => setIsCriteriaFormOpen(false)} disabled={isSubmittingCriteria}>Cancel</Button>
+              <Button onClick={handleCriteriaFormSubmit} disabled={isSubmittingCriteria}>
+                {isSubmittingCriteria && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Criterion
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
-      
+
       {isReviewFormOpen && (user.role === 'ADMIN' || user.role === 'SUPERVISOR') && (
         <Dialog open={isReviewFormOpen} onOpenChange={setIsReviewFormOpen}>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Start New Performance Review</DialogTitle>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
                 <div className="space-y-1">
                     <Label htmlFor="rev-employee">Employee</Label>
-                    <select 
-                        id="rev-employee" 
-                        value={reviewFormData.employeeId} 
-                        onChange={e => setReviewFormData({...reviewFormData, employeeId: e.target.value})}
-                        className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    <Select
+                        value={reviewFormData.employeeId}
+                        onValueChange={val => setReviewFormData({...reviewFormData, employeeId: val})}
+                        disabled={isSubmittingReview}
                     >
-                        <option value="" disabled>Select Employee</option>
-                        {employeesForSupervisor.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
-                    </select>
+                        <SelectTrigger id="rev-employee"><SelectValue placeholder="Select Employee"/></SelectTrigger>
+                        <SelectContent>
+                            {employeesForSupervisorReview.filter(e => e.role === 'EMPLOYEE' || e.role === 'SUPERVISOR').map(emp => <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
                 </div>
                  <div className="space-y-1">
                     <Label htmlFor="rev-criteria">Criteria</Label>
-                     <select 
-                        id="rev-criteria" 
-                        value={reviewFormData.criteriaId} 
-                        onChange={e => setReviewFormData({...reviewFormData, criteriaId: e.target.value})}
-                        className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                     <Select
+                        value={reviewFormData.criteriaId}
+                        onValueChange={val => setReviewFormData({...reviewFormData, criteriaId: val})}
+                        disabled={isSubmittingReview}
                     >
-                        <option value="" disabled>Select Criteria</option>
-                        {criteria.map(crit => <option key={crit.id} value={crit.id}>{crit.name}</option>)}
-                    </select>
+                        <SelectTrigger id="rev-criteria"><SelectValue placeholder="Select Criteria"/></SelectTrigger>
+                        <SelectContent>
+                            {criteria.map(crit => <SelectItem key={crit.id} value={crit.id}>{crit.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
                 </div>
                 <div className="space-y-1">
                     <Label htmlFor="rev-score">Score (1-5)</Label>
-                    <Input id="rev-score" type="number" min="1" max="5" value={reviewFormData.score} onChange={e => setReviewFormData({...reviewFormData, score: parseInt(e.target.value)})} />
+                    <Input id="rev-score" type="number" min="1" max="5" value={reviewFormData.score} onChange={e => setReviewFormData({...reviewFormData, score: parseInt(e.target.value)})} disabled={isSubmittingReview}/>
                 </div>
                  <div className="space-y-1">
                     <Label htmlFor="rev-date">Evaluation Date</Label>
-                    <Input id="rev-date" type="date" value={reviewFormData.evaluationDate} onChange={e => setReviewFormData({...reviewFormData, evaluationDate: e.target.value})} />
+                    <Input id="rev-date" type="date" value={reviewFormData.evaluationDate} onChange={e => setReviewFormData({...reviewFormData, evaluationDate: e.target.value})} disabled={isSubmittingReview}/>
                 </div>
                 <div className="space-y-1">
                     <Label htmlFor="rev-comments">Comments</Label>
-                    <Textarea id="rev-comments" value={reviewFormData.comments} onChange={e => setReviewFormData({...reviewFormData, comments: e.target.value})} />
+                    <Textarea id="rev-comments" value={reviewFormData.comments} onChange={e => setReviewFormData({...reviewFormData, comments: e.target.value})} disabled={isSubmittingReview}/>
                 </div>
             </div>
             <DialogFooter>
-                <Button variant="outline" onClick={() => setIsReviewFormOpen(false)}>Cancel</Button>
-                <Button onClick={handleReviewFormSubmit}>Save Review</Button>
+                <Button variant="outline" onClick={() => setIsReviewFormOpen(false)} disabled={isSubmittingReview}>Cancel</Button>
+                <Button onClick={handleReviewFormSubmit} disabled={isSubmittingReview}>
+                    {isSubmittingReview && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Review
+                </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -436,12 +493,16 @@ export default function EvaluationsPage() {
             <DialogHeader>
               <DialogTitle>Confirm Deletion</DialogTitle>
               <DialogDescription>
-                Are you sure you want to delete this {itemToDelete.type}? This action cannot be undone.
+                Are you sure you want to delete this {itemToDelete.type}: <strong>{itemToDelete.name || itemToDelete.id}</strong>? This action cannot be undone.
+                {itemToDelete.type === 'criteria' && <span className="block mt-2 text-destructive/90">Deleting criteria may affect existing performance scores linked to it.</span>}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-              <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
+              <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} disabled={isDeleting}>Cancel</Button>
+              <Button variant="destructive" onClick={confirmDelete} disabled={isDeleting}>
+                {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Delete
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -450,5 +511,3 @@ export default function EvaluationsPage() {
     </div>
   );
 }
-
-    
