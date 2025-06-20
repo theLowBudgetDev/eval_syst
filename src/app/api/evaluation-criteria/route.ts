@@ -11,9 +11,9 @@ export async function GET() {
       }
     });
     return NextResponse.json(criteria);
-  } catch (error) {
-    console.error("Error fetching evaluation criteria:", error);
-    return NextResponse.json({ message: 'Failed to fetch evaluation criteria', error: (error as Error).message }, { status: 500 });
+  } catch (dbError: any) {
+    console.error("Prisma error fetching evaluation criteria:", dbError);
+    return NextResponse.json({ message: 'Database error fetching criteria.', error: dbError.message, code: dbError.code }, { status: 500 });
   }
 }
 
@@ -27,16 +27,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Name and description are required' }, { status: 400 });
     }
 
-    const newCriteria = await prisma.evaluationCriteria.create({
-      data: {
-        name,
-        description,
-        weight: weight ? parseFloat(weight) : null,
-      },
-    });
-    return NextResponse.json(newCriteria, { status: 201 });
-  } catch (error) {
-    console.error("Error creating evaluation criteria:", error);
-    return NextResponse.json({ message: 'Failed to create evaluation criteria', error: (error as Error).message }, { status: 500 });
+    try {
+      const newCriteria = await prisma.evaluationCriteria.create({
+        data: {
+          name,
+          description,
+          weight: weight ? parseFloat(weight) : null,
+        },
+      });
+      return NextResponse.json(newCriteria, { status: 201 });
+    } catch (dbError: any) {
+      console.error("Prisma error creating evaluation criteria:", dbError);
+      return NextResponse.json({ message: 'Database error creating criterion.', error: dbError.message, code: dbError.code }, { status: 500 });
+    }
+  } catch (error: any) {
+    console.error("Error in POST /api/evaluation-criteria:", error);
+    if (error instanceof SyntaxError) {
+        return NextResponse.json({ message: 'Invalid JSON payload for criterion creation.'}, { status: 400 });
+    }
+    return NextResponse.json({ message: 'Failed to create evaluation criteria', error: error.message }, { status: 500 });
   }
 }

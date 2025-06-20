@@ -14,9 +14,9 @@ export async function GET() {
       }
     });
     return NextResponse.json(workOutputs);
-  } catch (error) {
-    console.error("Error fetching work outputs:", error);
-    return NextResponse.json({ message: 'Failed to fetch work outputs', error: (error as Error).message }, { status: 500 });
+  } catch (dbError: any) {
+    console.error("Prisma error fetching work outputs:", dbError);
+    return NextResponse.json({ message: 'Database error fetching work outputs.', error: dbError.message, code: dbError.code }, { status: 500 });
   }
 }
 
@@ -30,21 +30,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Employee ID, title, and submission date are required' }, { status: 400 });
     }
 
-    const newWorkOutput = await prisma.workOutput.create({
-      data: {
-        employeeId,
-        title,
-        description,
-        fileUrl,
-        submissionDate: new Date(submissionDate),
-      },
-    });
-    return NextResponse.json(newWorkOutput, { status: 201 });
-  } catch (error) {
-    console.error("Error creating work output:", error);
-    if ((error as any).code === 'P2003') { // Foreign key constraint failed (employeeId)
-        return NextResponse.json({ message: 'Invalid employee ID' }, { status: 400 });
+    try {
+      const newWorkOutput = await prisma.workOutput.create({
+        data: {
+          employeeId,
+          title,
+          description,
+          fileUrl,
+          submissionDate: new Date(submissionDate),
+        },
+      });
+      return NextResponse.json(newWorkOutput, { status: 201 });
+    } catch (dbError: any) {
+      console.error("Prisma error creating work output:", dbError);
+      if (dbError.code === 'P2003') { 
+          return NextResponse.json({ message: 'Invalid employee ID for work output.' }, { status: 400 });
+      }
+      return NextResponse.json({ message: 'Database error creating work output.', error: dbError.message, code: dbError.code }, { status: 500 });
     }
-    return NextResponse.json({ message: 'Failed to create work output', error: (error as Error).message }, { status: 500 });
+  } catch (error: any) {
+    console.error("Error in POST /api/work-outputs:", error);
+    if (error instanceof SyntaxError) {
+        return NextResponse.json({ message: 'Invalid JSON payload for work output creation.'}, { status: 400 });
+    }
+    return NextResponse.json({ message: 'Failed to create work output', error: error.message }, { status: 500 });
   }
 }

@@ -9,69 +9,95 @@ interface Params {
 
 // GET /api/attendance-records/[id] - Fetch a single attendance record
 export async function GET(request: Request, { params }: { params: Params }) {
-  const { id } = params;
   try {
-    const record = await prisma.attendanceRecord.findUnique({
-      where: { id },
-      include: {
-        employee: { select: { id: true, name: true } },
-      },
-    });
-    if (!record) {
-      return NextResponse.json({ message: 'Attendance record not found' }, { status: 404 });
+    const { id } = params;
+    if (!id) {
+      return NextResponse.json({ message: 'Attendance record ID is required.' }, { status: 400 });
     }
-    return NextResponse.json(record);
-  } catch (error) {
-    console.error(`Error fetching attendance record ${id}:`, error);
-    return NextResponse.json({ message: 'Failed to fetch attendance record', error: (error as Error).message }, { status: 500 });
+    try {
+      const record = await prisma.attendanceRecord.findUnique({
+        where: { id },
+        include: {
+          employee: { select: { id: true, name: true } },
+        },
+      });
+      if (!record) {
+        return NextResponse.json({ message: 'Attendance record not found' }, { status: 404 });
+      }
+      return NextResponse.json(record);
+    } catch (dbError: any) {
+      console.error(`Prisma error fetching attendance record ${id}:`, dbError);
+      return NextResponse.json({ message: 'Database error fetching attendance record.', error: dbError.message, code: dbError.code }, { status: 500 });
+    }
+  } catch (error: any) {
+    console.error(`Error in GET /api/attendance-records/[id] for id ${params?.id}:`, error);
+    return NextResponse.json({ message: 'Failed to fetch attendance record', error: error.message }, { status: 500 });
   }
 }
 
 
 // PUT /api/attendance-records/[id] - Update an attendance record
 export async function PUT(request: Request, { params }: { params: Params }) {
-  const { id } = params;
   try {
+    const { id } = params;
+    if (!id) {
+      return NextResponse.json({ message: 'Attendance record ID is required for update.' }, { status: 400 });
+    }
     const data = await request.json();
     const { employeeId, date, status, notes } = data;
 
     const updateData: any = {};
-    // employeeId typically should not change for an existing record, but included if needed
     if (employeeId) updateData.employeeId = employeeId; 
     if (date) updateData.date = new Date(date);
     if (status) updateData.status = status as AttendanceStatus;
     if (notes !== undefined) updateData.notes = notes;
 
-    const updatedRecord = await prisma.attendanceRecord.update({
-      where: { id },
-      data: updateData,
-    });
-    return NextResponse.json(updatedRecord);
-  } catch (error) {
-    console.error(`Error updating attendance record ${id}:`, error);
-    if ((error as any).code === 'P2025') { // Record to update not found
-        return NextResponse.json({ message: 'Attendance record not found' }, { status: 404 });
+    try {
+      const updatedRecord = await prisma.attendanceRecord.update({
+        where: { id },
+        data: updateData,
+      });
+      return NextResponse.json(updatedRecord);
+    } catch (dbError: any) {
+      console.error(`Prisma error updating attendance record ${id}:`, dbError);
+      if (dbError.code === 'P2025') {
+          return NextResponse.json({ message: 'Attendance record not found for update.' }, { status: 404 });
+      }
+      if (dbError.code === 'P2003') {
+          return NextResponse.json({ message: 'Invalid employee ID for attendance record.' }, { status: 400 });
+      }
+      return NextResponse.json({ message: 'Database error updating attendance record.', error: dbError.message, code: dbError.code }, { status: 500 });
     }
-    if ((error as any).code === 'P2003') { // Foreign key constraint failed
-        return NextResponse.json({ message: 'Invalid employee ID' }, { status: 400 });
+  } catch (error: any) {
+    console.error(`Error in PUT /api/attendance-records/[id] for id ${params?.id}:`, error);
+    if (error instanceof SyntaxError) {
+        return NextResponse.json({ message: 'Invalid JSON payload for attendance update.'}, { status: 400 });
     }
-    return NextResponse.json({ message: 'Failed to update attendance record', error: (error as Error).message }, { status: 500 });
+    return NextResponse.json({ message: 'Failed to update attendance record', error: error.message }, { status: 500 });
   }
 }
 
 // DELETE /api/attendance-records/[id] - Delete an attendance record
 export async function DELETE(request: Request, { params }: { params: Params }) {
-  const { id } = params;
   try {
-    await prisma.attendanceRecord.delete({
-      where: { id },
-    });
-    return NextResponse.json({ message: 'Attendance record deleted successfully' }, { status: 200 });
-  } catch (error) {
-    console.error(`Error deleting attendance record ${id}:`, error);
-    if ((error as any).code === 'P2025') { // Record to delete not found
-        return NextResponse.json({ message: 'Attendance record not found' }, { status: 404 });
+    const { id } = params;
+    if (!id) {
+      return NextResponse.json({ message: 'Attendance record ID is required for deletion.' }, { status: 400 });
     }
-    return NextResponse.json({ message: 'Failed to delete attendance record', error: (error as Error).message }, { status: 500 });
+    try {
+      await prisma.attendanceRecord.delete({
+        where: { id },
+      });
+      return NextResponse.json({ message: 'Attendance record deleted successfully' }, { status: 200 });
+    } catch (dbError: any) {
+      console.error(`Prisma error deleting attendance record ${id}:`, dbError);
+      if (dbError.code === 'P2025') {
+          return NextResponse.json({ message: 'Attendance record not found for deletion.' }, { status: 404 });
+      }
+      return NextResponse.json({ message: 'Database error deleting attendance record.', error: dbError.message, code: dbError.code }, { status: 500 });
+    }
+  } catch (error: any) {
+    console.error(`Error in DELETE /api/attendance-records/[id] for id ${params?.id}:`, error);
+    return NextResponse.json({ message: 'Failed to delete attendance record', error: error.message }, { status: 500 });
   }
 }

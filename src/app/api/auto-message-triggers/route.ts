@@ -12,9 +12,9 @@ export async function GET() {
       }
     });
     return NextResponse.json(triggers);
-  } catch (error) {
-    console.error("Error fetching auto message triggers:", error);
-    return NextResponse.json({ message: 'Failed to fetch auto message triggers', error: (error as Error).message }, { status: 500 });
+  } catch (dbError: any) {
+    console.error("Prisma error fetching auto message triggers:", dbError);
+    return NextResponse.json({ message: 'Database error fetching triggers.', error: dbError.message, code: dbError.code }, { status: 500 });
   }
 }
 
@@ -28,17 +28,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Event name and message template are required' }, { status: 400 });
     }
 
-    const newTrigger = await prisma.autoMessageTrigger.create({
-      data: {
-        eventName: eventName as MessageEventType,
-        messageTemplate,
-        isActive: isActive !== undefined ? isActive : true,
-        daysBeforeEvent: daysBeforeEvent ? parseInt(daysBeforeEvent, 10) : null,
-      },
-    });
-    return NextResponse.json(newTrigger, { status: 201 });
-  } catch (error) {
-    console.error("Error creating auto message trigger:", error);
-    return NextResponse.json({ message: 'Failed to create auto message trigger', error: (error as Error).message }, { status: 500 });
+    try {
+      const newTrigger = await prisma.autoMessageTrigger.create({
+        data: {
+          eventName: eventName as MessageEventType,
+          messageTemplate,
+          isActive: isActive !== undefined ? isActive : true,
+          daysBeforeEvent: daysBeforeEvent ? parseInt(daysBeforeEvent, 10) : null,
+        },
+      });
+      return NextResponse.json(newTrigger, { status: 201 });
+    } catch (dbError: any) {
+      console.error("Prisma error creating auto message trigger:", dbError);
+      return NextResponse.json({ message: 'Database error creating trigger.', error: dbError.message, code: dbError.code }, { status: 500 });
+    }
+  } catch (error: any) {
+    console.error("Error in POST /api/auto-message-triggers:", error);
+    if (error instanceof SyntaxError) {
+        return NextResponse.json({ message: 'Invalid JSON payload for trigger creation.'}, { status: 400 });
+    }
+    return NextResponse.json({ message: 'Failed to create auto message trigger', error: error.message }, { status: 500 });
   }
 }

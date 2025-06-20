@@ -9,26 +9,37 @@ interface Params {
 
 // GET /api/auto-message-triggers/[id] - Fetch a single trigger
 export async function GET(request: Request, { params }: { params: Params }) {
-  const { id } = params;
   try {
-    const trigger = await prisma.autoMessageTrigger.findUnique({
-      where: { id },
-    });
-    if (!trigger) {
-      return NextResponse.json({ message: 'Auto message trigger not found' }, { status: 404 });
+    const { id } = params;
+    if (!id) {
+      return NextResponse.json({ message: 'Trigger ID is required.' }, { status: 400 });
     }
-    return NextResponse.json(trigger);
-  } catch (error) {
-    console.error(`Error fetching auto message trigger ${id}:`, error);
-    return NextResponse.json({ message: 'Failed to fetch auto message trigger', error: (error as Error).message }, { status: 500 });
+    try {
+      const trigger = await prisma.autoMessageTrigger.findUnique({
+        where: { id },
+      });
+      if (!trigger) {
+        return NextResponse.json({ message: 'Auto message trigger not found' }, { status: 404 });
+      }
+      return NextResponse.json(trigger);
+    } catch (dbError: any) {
+      console.error(`Prisma error fetching auto message trigger ${id}:`, dbError);
+      return NextResponse.json({ message: 'Database error fetching trigger.', error: dbError.message, code: dbError.code }, { status: 500 });
+    }
+  } catch (error: any) {
+    console.error(`Error in GET /api/auto-message-triggers/[id] for id ${params?.id}:`, error);
+    return NextResponse.json({ message: 'Failed to fetch auto message trigger', error: error.message }, { status: 500 });
   }
 }
 
 
 // PUT /api/auto-message-triggers/[id] - Update an auto message trigger
 export async function PUT(request: Request, { params }: { params: Params }) {
-  const { id } = params;
   try {
+    const { id } = params;
+    if (!id) {
+      return NextResponse.json({ message: 'Trigger ID is required for update.' }, { status: 400 });
+    }
     const data = await request.json();
     const { eventName, messageTemplate, isActive, daysBeforeEvent } = data;
 
@@ -36,35 +47,53 @@ export async function PUT(request: Request, { params }: { params: Params }) {
     if (eventName) updateData.eventName = eventName as MessageEventType;
     if (messageTemplate) updateData.messageTemplate = messageTemplate;
     if (isActive !== undefined) updateData.isActive = isActive;
+    // Ensure daysBeforeEvent is either an int or null, not 0 if meant to be null
     if (daysBeforeEvent !== undefined) updateData.daysBeforeEvent = daysBeforeEvent ? parseInt(daysBeforeEvent, 10) : null;
 
-    const updatedTrigger = await prisma.autoMessageTrigger.update({
-      where: { id },
-      data: updateData,
-    });
-    return NextResponse.json(updatedTrigger);
-  } catch (error) {
-    console.error(`Error updating auto message trigger ${id}:`, error);
-     if ((error as any).code === 'P2025') { // Record to update not found
-        return NextResponse.json({ message: 'Auto message trigger not found' }, { status: 404 });
+
+    try {
+      const updatedTrigger = await prisma.autoMessageTrigger.update({
+        where: { id },
+        data: updateData,
+      });
+      return NextResponse.json(updatedTrigger);
+    } catch (dbError: any) {
+      console.error(`Prisma error updating auto message trigger ${id}:`, dbError);
+      if (dbError.code === 'P2025') { 
+          return NextResponse.json({ message: 'Auto message trigger not found for update.' }, { status: 404 });
+      }
+      return NextResponse.json({ message: 'Database error updating trigger.', error: dbError.message, code: dbError.code }, { status: 500 });
     }
-    return NextResponse.json({ message: 'Failed to update auto message trigger', error: (error as Error).message }, { status: 500 });
+  } catch (error: any) {
+    console.error(`Error in PUT /api/auto-message-triggers/[id] for id ${params?.id}:`, error);
+    if (error instanceof SyntaxError) {
+        return NextResponse.json({ message: 'Invalid JSON payload for trigger update.'}, { status: 400 });
+    }
+    return NextResponse.json({ message: 'Failed to update auto message trigger', error: error.message }, { status: 500 });
   }
 }
 
 // DELETE /api/auto-message-triggers/[id] - Delete an auto message trigger
 export async function DELETE(request: Request, { params }: { params: Params }) {
-  const { id } = params;
   try {
-    await prisma.autoMessageTrigger.delete({
-      where: { id },
-    });
-    return NextResponse.json({ message: 'Auto message trigger deleted successfully' }, { status: 200 });
-  } catch (error) {
-    console.error(`Error deleting auto message trigger ${id}:`, error);
-    if ((error as any).code === 'P2025') { // Record to delete not found
-        return NextResponse.json({ message: 'Auto message trigger not found' }, { status: 404 });
+    const { id } = params;
+    if (!id) {
+      return NextResponse.json({ message: 'Trigger ID is required for deletion.' }, { status: 400 });
     }
-    return NextResponse.json({ message: 'Failed to delete auto message trigger', error: (error as Error).message }, { status: 500 });
+    try {
+      await prisma.autoMessageTrigger.delete({
+        where: { id },
+      });
+      return NextResponse.json({ message: 'Auto message trigger deleted successfully' }, { status: 200 });
+    } catch (dbError: any) {
+      console.error(`Prisma error deleting auto message trigger ${id}:`, dbError);
+      if (dbError.code === 'P2025') {
+          return NextResponse.json({ message: 'Auto message trigger not found for deletion.' }, { status: 404 });
+      }
+      return NextResponse.json({ message: 'Database error deleting trigger.', error: dbError.message, code: dbError.code }, { status: 500 });
+    }
+  } catch (error: any) {
+    console.error(`Error in DELETE /api/auto-message-triggers/[id] for id ${params?.id}:`, error);
+    return NextResponse.json({ message: 'Failed to delete auto message trigger', error: error.message }, { status: 500 });
   }
 }

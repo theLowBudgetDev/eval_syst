@@ -11,28 +11,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Employee ID is required' }, { status: 400 });
     }
     
-    // supervisorId can be null to unassign
     const newSupervisorId = supervisorId === "--NONE--" || supervisorId === "" ? null : supervisorId;
 
-    const updatedEmployee = await prisma.user.update({
-      where: { id: employeeId },
-      data: {
-        supervisorId: newSupervisorId,
-      },
-      include: { // Optionally return the updated supervisor details
-        supervisor: true,
+    try {
+      const updatedEmployee = await prisma.user.update({
+        where: { id: employeeId },
+        data: {
+          supervisorId: newSupervisorId,
+        },
+        include: { 
+          supervisor: true,
+        }
+      });
+      return NextResponse.json(updatedEmployee, { status: 200 });
+    } catch (dbError: any) {
+      console.error("Prisma error updating supervisor assignment:", dbError);
+      if (dbError.code === 'P2025') { 
+          return NextResponse.json({ message: 'Employee not found for assignment update.' }, { status: 404 });
       }
-    });
-
-    return NextResponse.json(updatedEmployee, { status: 200 });
-  } catch (error) {
-    console.error("Error updating supervisor assignment:", error);
-    if ((error as any).code === 'P2025') { // Record to update not found (employeeId)
-        return NextResponse.json({ message: 'Employee not found' }, { status: 404 });
+      if (dbError.code === 'P2003') { 
+          return NextResponse.json({ message: 'Assigned supervisor ID does not exist.' }, { status: 404 });
+      }
+      return NextResponse.json({ message: 'Database error during supervisor assignment.', error: dbError.message, code: dbError.code }, { status: 500 });
     }
-    if ((error as any).code === 'P2003') { // Foreign key constraint failed (supervisorId does not exist)
-        return NextResponse.json({ message: 'Supervisor not found' }, { status: 404 });
+  } catch (error: any) {
+    console.error("Error processing supervisor assignment request:", error);
+    if (error instanceof SyntaxError) {
+        return NextResponse.json({ message: 'Invalid JSON payload for assignment.'}, { status: 400 });
     }
-    return NextResponse.json({ message: 'Failed to update supervisor assignment', error: (error as Error).message }, { status: 500 });
+    return NextResponse.json({ message: 'Failed to update supervisor assignment', error: error.message }, { status: 500 });
   }
 }

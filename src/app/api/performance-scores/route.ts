@@ -16,9 +16,9 @@ export async function GET() {
       }
     });
     return NextResponse.json(scores);
-  } catch (error) {
-    console.error("Error fetching performance scores:", error);
-    return NextResponse.json({ message: 'Failed to fetch performance scores', error: (error as Error).message }, { status: 500 });
+  } catch (dbError: any) {
+    console.error("Prisma error fetching performance scores:", dbError);
+    return NextResponse.json({ message: 'Database error fetching performance scores.', error: dbError.message, code: dbError.code }, { status: 500 });
   }
 }
 
@@ -32,22 +32,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Missing required fields for performance score' }, { status: 400 });
     }
 
-    const newScore = await prisma.performanceScore.create({
-      data: {
-        employeeId,
-        criteriaId,
-        score: parseInt(score, 10),
-        comments,
-        evaluationDate: new Date(evaluationDate),
-        evaluatorId,
-      },
-    });
-    return NextResponse.json(newScore, { status: 201 });
-  } catch (error) {
-    console.error("Error creating performance score:", error);
-    if ((error as any).code === 'P2003') { // Foreign key constraint failed
-        return NextResponse.json({ message: 'Invalid employee, criteria, or evaluator ID' }, { status: 400 });
+    try {
+      const newScore = await prisma.performanceScore.create({
+        data: {
+          employeeId,
+          criteriaId,
+          score: parseInt(score, 10),
+          comments,
+          evaluationDate: new Date(evaluationDate),
+          evaluatorId,
+        },
+      });
+      return NextResponse.json(newScore, { status: 201 });
+    } catch (dbError: any) {
+      console.error("Prisma error creating performance score:", dbError);
+      if (dbError.code === 'P2003') { 
+          return NextResponse.json({ message: 'Invalid employee, criteria, or evaluator ID for performance score.' }, { status: 400 });
+      }
+      return NextResponse.json({ message: 'Database error creating performance score.', error: dbError.message, code: dbError.code }, { status: 500 });
     }
-    return NextResponse.json({ message: 'Failed to create performance score', error: (error as Error).message }, { status: 500 });
+  } catch (error: any) {
+    console.error("Error in POST /api/performance-scores:", error);
+    if (error instanceof SyntaxError) {
+        return NextResponse.json({ message: 'Invalid JSON payload for performance score creation.'}, { status: 400 });
+    }
+    return NextResponse.json({ message: 'Failed to create performance score', error: error.message }, { status: 500 });
   }
 }

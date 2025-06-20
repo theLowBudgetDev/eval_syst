@@ -15,8 +15,8 @@ export async function GET() {
       }
     });
     return NextResponse.json(supervisors);
-  } catch (error) {
-    console.error("Error fetching supervisors:", error);
-    return NextResponse.json({ message: 'Failed to fetch supervisors', error: (error as Error).message }, { status: 500 });
+  } catch (dbError: any) {
+    console.error("Prisma error fetching supervisors:", dbError);
+    return NextResponse.json({ message: 'Database error fetching supervisors.', error: dbError.message, code: dbError.code }, { status: 500 });
   }
 }

@@ -5,24 +5,29 @@ import type { UserRole } from '@prisma/client';
 
 // GET /api/users - Fetch all users or users by supervisorId
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const supervisorId = searchParams.get('supervisorId');
-
   try {
-    const users = await prisma.user.findMany({
-      where: supervisorId ? { supervisorId } : {},
-      include: {
-        supervisor: true, 
-        supervisedEmployees: true, 
-      },
-      orderBy: {
-        name: 'asc',
-      }
-    });
-    return NextResponse.json(users);
-  } catch (error) {
-    console.error("Error fetching users:", error);
-    return NextResponse.json({ message: 'Failed to fetch users', error: (error as Error).message }, { status: 500 });
+    const { searchParams } = new URL(request.url);
+    const supervisorId = searchParams.get('supervisorId');
+
+    try {
+      const users = await prisma.user.findMany({
+        where: supervisorId ? { supervisorId } : {},
+        include: {
+          supervisor: true, 
+          supervisedEmployees: true, 
+        },
+        orderBy: {
+          name: 'asc',
+        }
+      });
+      return NextResponse.json(users);
+    } catch (dbError: any) {
+      console.error("Prisma error fetching users:", dbError);
+      return NextResponse.json({ message: 'Database error while fetching users.', error: dbError.message, code: dbError.code }, { status: 500 });
+    }
+  } catch (error: any) {
+    console.error("Error in GET /api/users:", error);
+    return NextResponse.json({ message: 'Failed to process request for users', error: error.message }, { status: 500 });
   }
 }
 
@@ -36,24 +41,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
     }
 
-    const newUser = await prisma.user.create({
-      data: {
-        name,
-        email,
-        department,
-        position,
-        hireDate: new Date(hireDate), 
-        avatarUrl,
-        role: role as UserRole, 
-        supervisorId: supervisorId || null,
-      },
-    });
-    return NextResponse.json(newUser, { status: 201 });
-  } catch (error) {
-    console.error("Error creating user:", error);
-    if ((error as any).code === 'P2002' && (error as any).meta?.target?.includes('email')) {
-      return NextResponse.json({ message: 'This email address is already in use. Please choose another one.' }, { status: 409 });
+    try {
+      const newUser = await prisma.user.create({
+        data: {
+          name,
+          email,
+          department,
+          position,
+          hireDate: new Date(hireDate), 
+          avatarUrl,
+          role: role as UserRole, 
+          supervisorId: supervisorId || null,
+        },
+      });
+      return NextResponse.json(newUser, { status: 201 });
+    } catch (dbError: any) {
+      console.error("Prisma error creating user:", dbError);
+      if (dbError.code === 'P2002' && dbError.meta?.target?.includes('email')) {
+        return NextResponse.json({ message: 'This email address is already in use. Please choose another one.' }, { status: 409 });
+      }
+      if (dbError.code === 'P2003' && dbError.meta?.field_name?.includes('supervisorId')) { 
+          return NextResponse.json({ message: 'Assigned supervisor ID does not exist.' }, { status: 400 });
+      }
+      return NextResponse.json({ message: 'Database error while creating user.', error: dbError.message, code: dbError.code }, { status: 500 });
     }
-    return NextResponse.json({ message: 'Failed to create user', error: (error as Error).message }, { status: 500 });
+  } catch (error: any) {
+    console.error("Error in POST /api/users:", error);
+    if (error instanceof SyntaxError) {
+        return NextResponse.json({ message: 'Invalid JSON payload for user creation.'}, { status: 400 });
+    }
+    return NextResponse.json({ message: 'Failed to create user', error: error.message }, { status: 500 });
   }
 }
