@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useAuth, mockAuthUsers, type AuthUser } from "@/contexts/AuthContext";
+import { useAuth, mockAuthUsers } from "@/contexts/AuthContext"; // mockAuthUsers for selection
+import type { AppUser } from "@/types"; // Using AppUser
 import { useRouter } from "next/navigation";
 import { LogIn } from "lucide-react";
 
@@ -17,9 +18,8 @@ export default function LoginPage() {
 
   React.useEffect(() => {
     if (!isLoading && user) {
-      // If user is already logged in, redirect them from login page
-      if (user.role === "admin") router.push("/");
-      else if (user.role === "supervisor") router.push("/supervisor-dashboard");
+      if (user.role === "ADMIN") router.push("/");
+      else if (user.role === "SUPERVISOR") router.push("/supervisor-dashboard");
       else router.push("/employee-dashboard");
     }
   }, [user, isLoading, router]);
@@ -27,9 +27,9 @@ export default function LoginPage() {
   const handleLogin = () => {
     const userToLogin = mockAuthUsers.find(u => u.id === selectedUserId);
     if (userToLogin) {
+      // The mockAuthUsers are already AppUser type with uppercase roles
       login(userToLogin);
     } else {
-      // Handle error: user not found (though this shouldn't happen with a select)
       alert("Please select a user to login.");
     }
   };
@@ -38,12 +38,9 @@ export default function LoginPage() {
     return <div className="flex justify-center items-center h-screen">Loading...</div>;
   }
   
-  // If user is already logged in (and not loading), this page content won't be shown due to redirect.
-  // But as a fallback or if redirect is slow:
   if (user && !isLoading) {
      return <div className="flex justify-center items-center h-screen">Redirecting...</div>;
   }
-
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
@@ -65,7 +62,7 @@ export default function LoginPage() {
               <SelectContent>
                 {mockAuthUsers.map((u) => (
                   <SelectItem key={u.id} value={u.id}>
-                    {u.name} ({u.role.charAt(0).toUpperCase() + u.role.slice(1)})
+                    {u.name} ({u.role.charAt(0).toUpperCase() + u.role.slice(1).toLowerCase()})
                   </SelectItem>
                 ))}
               </SelectContent>

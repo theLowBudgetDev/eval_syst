@@ -19,11 +19,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, Settings, LogOut } from 'lucide-react'; // Changed SettingsIcon to Settings as per lucide-react
+import { Menu, Settings, LogOut } from 'lucide-react';
 import { getNavLinks, type NavLink as NavLinkType } from '@/lib/navigation';
+import type { UserRoleType } from '@/types'; // Import UserRoleType
 
 // Helper to render navigation links, supports one level of sub-links
-function RenderNavLinks({ role }: { role: string | null }) {
+function RenderNavLinks({ role }: { role: UserRoleType | null }) { // Updated role type
   const navLinks = getNavLinks(role);
   const renderLinks = (links: NavLinkType[], isSubLink = false) => {
     return links.map((link) => (
@@ -66,16 +67,15 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   }
 
   if (!user && pathname !== '/login') {
-     // Still loading or redirecting, show minimal UI or a loader
     return <div className="flex items-center justify-center h-screen">Redirecting to login...</div>;
   }
 
   if (pathname === '/login') {
-    return <>{children}</>; // Render login page without main layout
+    return <>{children}</>; 
   }
 
-  if (!user) { // Should be caught by useEffect, but as a safeguard
-    return null; // Or a redirect component if preferred
+  if (!user) { 
+    return null; 
   }
 
   return (
@@ -94,7 +94,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
         </SidebarContent>
         <SidebarFooter className="p-2 group-data-[collapsible=icon]:justify-center">
           <SidebarMenuButton className="group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:aspect-square" tooltip="Settings" asChild>
-            <Link href={user?.role === 'admin' ? "/admin/settings" : "/my-profile"}> {/* Adapt link based on role */}
+            <Link href={user?.role === 'ADMIN' ? "/admin/settings" : "/my-profile"}>
                 <Settings className="h-4 w-4" />
                 <span className="group-data-[collapsible=icon]:hidden">Settings</span>
             </Link>
@@ -131,7 +131,6 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
           </div>
 
           <div className="flex items-center gap-4">
-            {/* DarkModeToggle can be added back here if needed */}
             <Avatar>
               <AvatarImage src={user?.avatarUrl || "https://placehold.co/40x40.png"} alt={user?.name || "User"} data-ai-hint="person face" />
               <AvatarFallback>{user?.name ? user.name.substring(0, 2).toUpperCase() : "U"}</AvatarFallback>
@@ -148,4 +147,3 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     </SidebarProvider>
   );
 }
-
