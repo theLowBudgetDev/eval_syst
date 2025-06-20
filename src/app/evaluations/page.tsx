@@ -27,12 +27,11 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
@@ -48,7 +47,7 @@ interface ReviewFormData {
   criteriaId: string;
   score: number;
   comments?: string;
-  evaluationDate: string;
+  evaluationDate: string; // YYYY-MM-DD
 }
 
 
@@ -126,14 +125,16 @@ export default function EvaluationsPage() {
 
   const getEmployeeName = (employeeId: string) => employees.find(emp => emp.id === employeeId)?.name || "Unknown";
   const getCriteriaName = (criteriaId: string) => criteria.find(c => c.id === criteriaId)?.name || "Unknown";
-  const getEvaluatorName = (evaluatorId: string | null) => employees.find(emp => emp.id === evaluatorId)?.name || "Unknown";
+  const getEvaluatorName = (evaluatorId: string | null) => evaluatorId ? (employees.find(emp => emp.id === evaluatorId)?.name || "Unknown") : "N/A";
+
 
   const filteredScores = React.useMemo(() => {
     if (user?.role === 'SUPERVISOR') {
       const supervisedEmployeeIds = employees.filter(emp => emp.supervisorId === user.id).map(emp => emp.id);
+      // Supervisor sees scores for their team members OR scores they conducted for anyone (e.g. peer review)
       return scores.filter(score => supervisedEmployeeIds.includes(score.employeeId) || score.evaluatorId === user.id);
     }
-    return scores;
+    return scores; // Admin sees all
   }, [scores, user, employees]);
 
 
@@ -150,7 +151,7 @@ export default function EvaluationsPage() {
     }
     if (crit) {
       setEditingCriteria(crit);
-      setCriteriaFormData({ name: crit.name, description: crit.description, weight: crit.weight });
+      setCriteriaFormData({ name: crit.name, description: crit.description, weight: crit.weight === undefined || crit.weight === null ? null : Number(crit.weight) });
     } else {
       setEditingCriteria(null);
       setCriteriaFormData({ name: '', description: '', weight: null });
@@ -163,7 +164,20 @@ export default function EvaluationsPage() {
     setIsSubmittingCriteria(true);
     const method = editingCriteria ? 'PUT' : 'POST';
     const url = editingCriteria ? `/api/evaluation-criteria/${editingCriteria.id}` : '/api/evaluation-criteria';
-    const payload = { ...criteriaFormData, weight: criteriaFormData.weight ? Number(criteriaFormData.weight) : null };
+    
+    let weightValue: number | null = null;
+    if (criteriaFormData.weight !== undefined && criteriaFormData.weight !== null && criteriaFormData.weight !== "") {
+        const parsedWeight = parseFloat(String(criteriaFormData.weight));
+        if (!isNaN(parsedWeight)) {
+            weightValue = parsedWeight;
+        } else {
+            toast({ title: "Invalid Input", description: "Weight must be a valid number.", variant: "destructive" });
+            setIsSubmittingCriteria(false);
+            return;
+        }
+    }
+    const payload = { ...criteriaFormData, weight: weightValue };
+
     try {
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (!res.ok) {
@@ -230,9 +244,9 @@ export default function EvaluationsPage() {
     setIsSubmittingReview(true);
     const payload = {
       ...reviewFormData,
-      score: Number(reviewFormData.score),
+      score: Number(reviewFormData.score), // Ensure score is number
       evaluatorId: user.id,
-      evaluationDate: new Date(reviewFormData.evaluationDate).toISOString()
+      evaluationDate: new Date(reviewFormData.evaluationDate).toISOString() // Ensure ISO string
     };
     try {
       const res = await fetch('/api/performance-scores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -252,7 +266,7 @@ export default function EvaluationsPage() {
 
   const employeesForSupervisorReview = user?.role === 'SUPERVISOR'
     ? employees.filter(e => e.supervisorId === user.id)
-    : employees;
+    : employees; // Admin sees all applicable employees
 
   if (authIsLoading || isLoadingData || !user || (user.role !== 'ADMIN' && user.role !== 'SUPERVISOR')) {
     return (
@@ -289,7 +303,7 @@ export default function EvaluationsPage() {
                     <CardDescription>Manage the criteria used for employee evaluations.</CardDescription>
                 </div>
                 {canPerformWriteActions && (
-                  <Button onClick={() => handleOpenCriteriaForm()} disabled={isSubmittingCriteria}>
+                  <Button onClick={() => handleOpenCriteriaForm()} disabled={isSubmittingCriteria || isLoadingData}>
                       <PlusCircle className="mr-2 h-4 w-4" /> Add New Criterion
                   </Button>
                 )}
@@ -313,10 +327,10 @@ export default function EvaluationsPage() {
                       <TableCell className="text-center">{crit.weight ? `${crit.weight * 100}%` : "N/A"}</TableCell>
                       {canPerformWriteActions && (
                         <TableCell className="text-right space-x-2">
-                          <Button variant="outline" size="icon" onClick={() => handleOpenCriteriaForm(crit)} disabled={isSubmittingCriteria}>
+                          <Button variant="outline" size="icon" onClick={() => handleOpenCriteriaForm(crit)} disabled={isSubmittingCriteria || isDeleting}>
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="destructive" size="icon" onClick={() => handleDeleteRequest(crit.id, 'criteria', crit.name)} disabled={isDeleting}>
+                          <Button variant="destructive" size="icon" onClick={() => handleDeleteRequest(crit.id, 'criteria', crit.name)} disabled={isDeleting || isSubmittingCriteria}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </TableCell>
@@ -344,7 +358,7 @@ export default function EvaluationsPage() {
                     <CardDescription>View and manage employee performance reviews.</CardDescription>
                 </div>
                 {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') && (
-                  <Button onClick={() => handleOpenReviewForm()} disabled={isSubmittingReview}>
+                  <Button onClick={() => handleOpenReviewForm()} disabled={isSubmittingReview || isLoadingData}>
                       <PlusCircle className="mr-2 h-4 w-4" /> Start New Review
                   </Button>
                 )}
@@ -366,7 +380,7 @@ export default function EvaluationsPage() {
                   {filteredScores.length > 0 ? filteredScores.map((score) => (
                     <TableRow key={score.id}>
                       <TableCell className="font-medium">{getEmployeeName(score.employeeId)}</TableCell>
-                      <TableCell>{format(new Date(score.evaluationDate), "PP")}</TableCell>
+                      <TableCell>{format(parseISO(score.evaluationDate), "PP")}</TableCell>
                       <TableCell><Badge variant="outline">{getCriteriaName(score.criteriaId)}</Badge></TableCell>
                       <TableCell className="text-center">
                         <Badge variant={score.score >= 4 ? "default" : score.score === 3 ? "secondary" : "destructive"}>
@@ -375,11 +389,11 @@ export default function EvaluationsPage() {
                       </TableCell>
                       <TableCell>{getEvaluatorName(score.evaluatorId)}</TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Button variant="outline" size="icon" onClick={() => toast({title: `Review: ${getEmployeeName(score.employeeId)}`, description: score.comments || "No comments for this review."})}>
+                        <Button variant="outline" size="icon" onClick={() => toast({title: `Review Details: ${getEmployeeName(score.employeeId)}`, description: score.comments || "No comments for this review."})}>
                           <Eye className="h-4 w-4" />
                         </Button>
                          {(user.role === 'ADMIN' || (user.role === 'SUPERVISOR' && score.evaluatorId === user.id)) && (
-                            <Button variant="destructive" size="icon" onClick={() => handleDeleteRequest(score.id, 'score', `${getEmployeeName(score.employeeId)} on ${format(new Date(score.evaluationDate), "PP")}`)} disabled={isDeleting}>
+                            <Button variant="destructive" size="icon" onClick={() => handleDeleteRequest(score.id, 'score', `${getEmployeeName(score.employeeId)} on ${format(parseISO(score.evaluationDate), "PP")}`)} disabled={isDeleting || isSubmittingReview}>
                             <Trash2 className="h-4 w-4" />
                             </Button>
                          )}
@@ -416,7 +430,17 @@ export default function EvaluationsPage() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="crit-weight">Weight (0.0 to 1.0, e.g., 0.2 for 20%)</Label>
-                <Input id="crit-weight" type="number" step="0.01" min="0" max="1" value={criteriaFormData.weight ?? ""} onChange={e => setCriteriaFormData({...criteriaFormData, weight: e.target.value ? parseFloat(e.target.value) : null})} disabled={isSubmittingCriteria}/>
+                <Input 
+                    id="crit-weight" 
+                    type="number" 
+                    step="0.01" 
+                    min="0" 
+                    max="1" 
+                    value={criteriaFormData.weight === null || criteriaFormData.weight === undefined ? "" : criteriaFormData.weight} 
+                    onChange={e => setCriteriaFormData({...criteriaFormData, weight: e.target.value === "" ? null : parseFloat(e.target.value)})} 
+                    disabled={isSubmittingCriteria}
+                    placeholder="e.g., 0.25"
+                />
               </div>
             </div>
             <DialogFooter>
@@ -511,3 +535,5 @@ export default function EvaluationsPage() {
     </div>
   );
 }
+
+    

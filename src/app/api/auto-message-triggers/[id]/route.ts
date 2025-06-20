@@ -7,6 +7,8 @@ interface Params {
   id: string;
 }
 
+const VALID_EVENT_TYPES: MessageEventType[] = ["DEADLINE_APPROACHING", "REVIEW_DUE", "FEEDBACK_REQUEST", "EVALUATION_COMPLETED", "NEW_ASSIGNMENT"];
+
 // GET /api/auto-message-triggers/[id] - Fetch a single trigger
 export async function GET(request: Request, { params }: { params: Params }) {
   try {
@@ -45,15 +47,26 @@ export async function PUT(request: Request, { params }: { params: Params }) {
 
     const updateData: any = {};
     if (eventName) {
-        const validEventTypes: MessageEventType[] = ["DEADLINE_APPROACHING", "REVIEW_DUE", "FEEDBACK_REQUEST", "EVALUATION_COMPLETED", "NEW_ASSIGNMENT"];
-        if (!validEventTypes.includes(eventName as MessageEventType)) {
+        if (!VALID_EVENT_TYPES.includes(eventName as MessageEventType)) {
             return NextResponse.json({ message: `Invalid event name: ${eventName}` }, { status: 400 });
         }
-        updateData.eventName = eventName as MessageEventType; // eventName is string
+        updateData.eventName = eventName as MessageEventType;
     }
-    if (messageTemplate) updateData.messageTemplate = messageTemplate;
+    if (messageTemplate !== undefined) updateData.messageTemplate = messageTemplate;
     if (isActive !== undefined) updateData.isActive = isActive;
-    if (daysBeforeEvent !== undefined) updateData.daysBeforeEvent = daysBeforeEvent ? parseInt(daysBeforeEvent, 10) : null;
+    
+    if (daysBeforeEvent !== undefined) {
+        if (daysBeforeEvent === null || daysBeforeEvent === "") {
+            updateData.daysBeforeEvent = null;
+        } else {
+            const numDays = parseInt(String(daysBeforeEvent), 10);
+            if (!isNaN(numDays)) {
+                updateData.daysBeforeEvent = numDays;
+            } else {
+                return NextResponse.json({ message: 'Invalid daysBeforeEvent value. Must be a number or null.' }, { status: 400 });
+            }
+        }
+    }
 
 
     try {
@@ -102,3 +115,5 @@ export async function DELETE(request: Request, { params }: { params: Params }) {
     return NextResponse.json({ message: 'Failed to delete auto message trigger', error: error.message }, { status: 500 });
   }
 }
+
+    

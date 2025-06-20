@@ -43,9 +43,21 @@ export async function PUT(request: Request, { params }: { params: Params }) {
     const { name, description, weight } = data;
 
     const updateData: any = {};
-    if (name) updateData.name = name;
-    if (description) updateData.description = description;
-    if (weight !== undefined) updateData.weight = weight ? parseFloat(weight) : null;
+    if (name !== undefined) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
+    
+    if (weight !== undefined) {
+        if (weight === null || String(weight).trim() === "") {
+            updateData.weight = null;
+        } else {
+            const numWeight = parseFloat(String(weight));
+            if (!isNaN(numWeight)) {
+                updateData.weight = numWeight;
+            } else {
+                 return NextResponse.json({ message: 'Invalid weight value. Must be a number or null.' }, { status: 400 });
+            }
+        }
+    }
 
 
     try {
@@ -102,3 +114,5 @@ export async function DELETE(request: Request, { params }: { params: Params }) {
     return NextResponse.json({ message: 'Failed to delete evaluation criteria', error: error.message }, { status: 500 });
   }
 }
+
+    

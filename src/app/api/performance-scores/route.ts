@@ -33,21 +33,34 @@ export async function POST(request: Request) {
     const data = await request.json();
     const { employeeId, criteriaId, score, comments, evaluationDate, evaluatorId } = data;
 
-    if (!employeeId || !criteriaId || !score || !evaluationDate || !evaluatorId) {
-      return NextResponse.json({ message: 'Missing required fields for performance score' }, { status: 400 });
+    if (!employeeId || !criteriaId || score === undefined || !evaluationDate || !evaluatorId) {
+      return NextResponse.json({ message: 'Missing required fields: employeeId, criteriaId, score, evaluationDate, evaluatorId' }, { status: 400 });
+    }
+    
+    const parsedScore = parseInt(String(score), 10);
+    if (isNaN(parsedScore) || parsedScore < 1 || parsedScore > 5) {
+        return NextResponse.json({ message: 'Score must be a number between 1 and 5.' }, { status: 400 });
     }
 
-    const newScore = await prisma.performanceScore.create({
-      data: {
-        employeeId,
-        criteriaId,
-        score: parseInt(score, 10),
-        comments,
-        evaluationDate: new Date(evaluationDate),
-        evaluatorId,
-      },
-    });
-    return NextResponse.json(newScore, { status: 201 });
+    try {
+        const newScore = await prisma.performanceScore.create({
+        data: {
+            employeeId,
+            criteriaId,
+            score: parsedScore,
+            comments,
+            evaluationDate: new Date(evaluationDate), // Ensure it's a Date object
+            evaluatorId,
+        },
+        });
+        return NextResponse.json(newScore, { status: 201 });
+    } catch (dbError: any) {
+        console.error("Prisma error creating performance score:", dbError);
+        if (dbError.code === 'P2003') { // Foreign key constraint failed
+             return NextResponse.json({ message: 'Invalid employee, criteria, or evaluator ID provided.' }, { status: 400 });
+        }
+         return NextResponse.json({ message: 'Database error creating performance score.', error: dbError.message, code: dbError.code }, { status: 500 });
+    }
   } catch (error: any) {
     console.error("Critical error in POST /api/performance-scores:", error);
     let status = 500;
@@ -60,9 +73,6 @@ export async function POST(request: Request) {
     if (error instanceof SyntaxError) {
         status = 400;
         responseBody.message = 'Invalid JSON payload for performance score creation.';
-    } else if (error.code === 'P2003') { 
-        status = 400;
-        responseBody.message = 'Invalid employee, criteria, or evaluator ID for performance score.';
     }
     
     return new Response(JSON.stringify(responseBody), {
@@ -71,3 +81,5 @@ export async function POST(request: Request) {
     });
   }
 }
+
+    

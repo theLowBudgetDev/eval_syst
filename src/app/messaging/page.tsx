@@ -62,8 +62,9 @@ export default function AutoMessagingPage() {
 
   const [triggers, setTriggers] = React.useState<AutoMessageTrigger[]>([]);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
-  const [isSubmitting, setIsSubmitting] = React.useState(false); // For form submission
-  const [isDeleting, setIsDeleting] = React.useState(false); // For deletion
+  const [isSubmitting, setIsSubmitting] = React.useState(false); 
+  const [isDeleting, setIsDeleting] = React.useState(false); 
+  const [activeToggleLoading, setActiveToggleLoading] = React.useState<string | null>(null);
 
 
   const [isFormOpen, setIsFormOpen] = React.useState(false);
@@ -108,25 +109,25 @@ export default function AutoMessagingPage() {
   }, [user, authIsLoading, router, fetchData]);
 
   const handleToggleActive = async (trigger: AutoMessageTrigger) => {
-    const updatedTrigger = { ...trigger, isActive: !trigger.isActive };
-    // Optimistically update UI
-    setTriggers(prev => prev.map(t => t.id === trigger.id ? updatedTrigger : t));
+    setActiveToggleLoading(trigger.id);
+    const updatedIsActive = !trigger.isActive;
     try {
       const res = await fetch(`/api/auto-message-triggers/${trigger.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: updatedTrigger.isActive }),
+        body: JSON.stringify({ isActive: updatedIsActive }),
       });
       if (!res.ok) {
-        // Revert optimistic update on error
-        setTriggers(prev => prev.map(t => t.id === trigger.id ? trigger : t));
-        const errorBody = await res.json().catch(() => ({ message: `Failed to update trigger (status ${res.status}, non-JSON response)` }));
-        throw new Error(errorBody.error || errorBody.message || `Failed to update trigger (status ${res.status})`);
+        const errorBody = await res.json().catch(() => ({ message: `Failed to update trigger status (status ${res.status}, non-JSON response)` }));
+        throw new Error(errorBody.error || errorBody.message || `Failed to update trigger status (status ${res.status})`);
       }
-      toast({ title: `Trigger ${updatedTrigger.isActive ? "Activated" : "Deactivated"}` });
-      // No need to re-fetch if only status changed and API confirmed
+      // Update local state after successful API call
+      setTriggers(prev => prev.map(t => t.id === trigger.id ? { ...t, isActive: updatedIsActive } : t));
+      toast({ title: `Trigger ${updatedIsActive ? "Activated" : "Deactivated"}` });
     } catch (error) {
-      toast({ title: "Error Updating Trigger", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "Error Updating Trigger Status", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setActiveToggleLoading(null);
     }
   };
 
@@ -137,7 +138,7 @@ export default function AutoMessagingPage() {
         eventName: trigger.eventName,
         messageTemplate: trigger.messageTemplate,
         isActive: trigger.isActive,
-        daysBeforeEvent: trigger.daysBeforeEvent,
+        daysBeforeEvent: trigger.daysBeforeEvent === undefined || trigger.daysBeforeEvent === null ? null : Number(trigger.daysBeforeEvent),
       });
     } else {
       setEditingTrigger(null);
@@ -150,7 +151,12 @@ export default function AutoMessagingPage() {
     setIsSubmitting(true);
     const method = editingTrigger ? 'PUT' : 'POST';
     const url = editingTrigger ? `/api/auto-message-triggers/${editingTrigger.id}` : '/api/auto-message-triggers';
-    const payload = { ...formData, daysBeforeEvent: formData.daysBeforeEvent ? Number(formData.daysBeforeEvent) : null };
+    
+    const daysValue = formData.daysBeforeEvent;
+    const payload = { 
+        ...formData, 
+        daysBeforeEvent: daysValue === undefined || daysValue === null || isNaN(Number(daysValue)) ? null : Number(daysValue)
+    };
 
     try {
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -159,7 +165,7 @@ export default function AutoMessagingPage() {
         throw new Error(errorBody.error || errorBody.message || `Failed to save trigger (status ${res.status})`);
       }
       toast({ title: `Trigger ${editingTrigger ? 'Updated' : 'Added'}` });
-      fetchData();
+      fetchData(); // Re-fetch data to show changes
       setIsFormOpen(false);
     } catch (error) {
       toast({ title: "Error Saving Trigger", description: (error as Error).message, variant: "destructive" });
@@ -183,7 +189,7 @@ export default function AutoMessagingPage() {
         throw new Error(errorBody.error || errorBody.message || `Failed to delete trigger (status ${res.status})`);
       }
       toast({ title: "Trigger Deleted" });
-      fetchData();
+      fetchData(); // Re-fetch data
     } catch (error) {
       toast({ title: "Error Deleting Trigger", description: (error as Error).message, variant: "destructive" });
     } finally {
@@ -212,7 +218,7 @@ export default function AutoMessagingPage() {
         title="Auto Messaging Configuration"
         description="Set up and manage automated messages for platform events."
         actions={
-          <Button onClick={() => handleOpenForm()} disabled={isSubmitting}>
+          <Button onClick={() => handleOpenForm()} disabled={isSubmitting || isLoadingData}>
             <PlusCircle className="mr-2 h-4 w-4" /> Add New Trigger
           </Button>
         }
@@ -261,20 +267,24 @@ export default function AutoMessagingPage() {
                     {trigger.daysBeforeEvent !== undefined && trigger.daysBeforeEvent !== null ? `${trigger.daysBeforeEvent} days before` : "General Event"}
                   </TableCell>
                   <TableCell className="text-center">
-                    <Switch
-                      checked={trigger.isActive}
-                      onCheckedChange={() => handleToggleActive(trigger)}
-                      aria-label={`Toggle ${trigger.eventName} trigger`}
-                    />
+                    {activeToggleLoading === trigger.id ? 
+                        <Loader2 className="h-5 w-5 animate-spin mx-auto" /> :
+                        <Switch
+                          checked={trigger.isActive}
+                          onCheckedChange={() => handleToggleActive(trigger)}
+                          aria-label={`Toggle ${trigger.eventName} trigger`}
+                          disabled={activeToggleLoading === trigger.id}
+                        />
+                    }
                      <Badge variant={trigger.isActive ? "default" : "outline"} className="mt-1 block w-fit mx-auto">
                         {trigger.isActive ? "Active" : "Inactive"}
                      </Badge>
                   </TableCell>
                   <TableCell className="text-right space-x-2">
-                    <Button variant="outline" size="icon" onClick={() => handleOpenForm(trigger)} disabled={isSubmitting}>
+                    <Button variant="outline" size="icon" onClick={() => handleOpenForm(trigger)} disabled={isSubmitting || activeToggleLoading === trigger.id}>
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="destructive" size="icon" onClick={() => handleDeleteRequest(trigger)} disabled={isDeleting}>
+                    <Button variant="destructive" size="icon" onClick={() => handleDeleteRequest(trigger)} disabled={isDeleting || activeToggleLoading === trigger.id}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>
@@ -323,7 +333,14 @@ export default function AutoMessagingPage() {
                 </div>
                  <div className="space-y-1">
                     <Label htmlFor="trigger-days">Days Before Event (Optional)</Label>
-                    <Input id="trigger-days" type="number" value={formData.daysBeforeEvent ?? ""} onChange={e => setFormData({...formData, daysBeforeEvent: e.target.value ? parseInt(e.target.value) : null})} disabled={isSubmitting}/>
+                    <Input 
+                        id="trigger-days" 
+                        type="number" 
+                        value={formData.daysBeforeEvent === null || formData.daysBeforeEvent === undefined ? "" : formData.daysBeforeEvent} 
+                        onChange={e => setFormData({...formData, daysBeforeEvent: e.target.value === "" ? null : parseInt(e.target.value, 10)})} 
+                        disabled={isSubmitting}
+                        placeholder="e.g., 7"
+                    />
                 </div>
                 <div className="flex items-center space-x-2">
                     <Switch id="trigger-active" checked={formData.isActive} onCheckedChange={checked => setFormData({...formData, isActive: checked})} disabled={isSubmitting}/>
@@ -333,7 +350,7 @@ export default function AutoMessagingPage() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsFormOpen(false)} disabled={isSubmitting}>Cancel</Button>
               <Button onClick={handleFormSubmit} disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Save Trigger
               </Button>
             </DialogFooter>
@@ -364,3 +381,6 @@ export default function AutoMessagingPage() {
     </div>
   );
 }
+
+
+    

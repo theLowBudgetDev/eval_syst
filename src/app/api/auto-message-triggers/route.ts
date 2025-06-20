@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import type { MessageEventType } from '@/types'; // Using string literal union
 
+const VALID_EVENT_TYPES: MessageEventType[] = ["DEADLINE_APPROACHING", "REVIEW_DUE", "FEEDBACK_REQUEST", "EVALUATION_COMPLETED", "NEW_ASSIGNMENT"];
+
 // GET /api/auto-message-triggers - Fetch all auto message triggers
 export async function GET() {
   try {
@@ -28,18 +30,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Event name and message template are required' }, { status: 400 });
     }
 
-    const validEventTypes: MessageEventType[] = ["DEADLINE_APPROACHING", "REVIEW_DUE", "FEEDBACK_REQUEST", "EVALUATION_COMPLETED", "NEW_ASSIGNMENT"];
-    if (!validEventTypes.includes(eventName as MessageEventType)) {
+    if (!VALID_EVENT_TYPES.includes(eventName as MessageEventType)) {
         return NextResponse.json({ message: `Invalid event name: ${eventName}` }, { status: 400 });
     }
+    
+    let parsedDays: number | null = null;
+    if (daysBeforeEvent !== undefined && daysBeforeEvent !== null && daysBeforeEvent !== "") {
+        const numDays = parseInt(String(daysBeforeEvent), 10);
+        if (!isNaN(numDays)) {
+            parsedDays = numDays;
+        } else {
+             return NextResponse.json({ message: 'Invalid daysBeforeEvent value. Must be a number.' }, { status: 400 });
+        }
+    }
+
 
     try {
       const newTrigger = await prisma.autoMessageTrigger.create({
         data: {
-          eventName: eventName as MessageEventType, // eventName is string
+          eventName: eventName as MessageEventType,
           messageTemplate,
           isActive: isActive !== undefined ? isActive : true,
-          daysBeforeEvent: daysBeforeEvent ? parseInt(daysBeforeEvent, 10) : null,
+          daysBeforeEvent: parsedDays,
         },
       });
       return NextResponse.json(newTrigger, { status: 201 });
@@ -55,3 +67,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'Failed to create auto message trigger', error: error.message }, { status: 500 });
   }
 }
+
+    

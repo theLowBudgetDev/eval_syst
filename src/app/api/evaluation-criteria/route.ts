@@ -27,12 +27,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Name and description are required' }, { status: 400 });
     }
 
+    let parsedWeight: number | null = null;
+    if (weight !== undefined && weight !== null && String(weight).trim() !== "") {
+        const numWeight = parseFloat(String(weight));
+        if (!isNaN(numWeight)) {
+            parsedWeight = numWeight;
+        } else {
+            return NextResponse.json({ message: 'Invalid weight value. Must be a number.' }, { status: 400 });
+        }
+    }
+
     try {
       const newCriteria = await prisma.evaluationCriteria.create({
         data: {
           name,
           description,
-          weight: weight ? parseFloat(weight) : null,
+          weight: parsedWeight,
         },
       });
       return NextResponse.json(newCriteria, { status: 201 });
@@ -48,3 +58,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'Failed to create evaluation criteria', error: error.message }, { status: 500 });
   }
 }
+
+    
