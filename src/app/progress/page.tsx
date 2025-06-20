@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { mockAttendanceRecords, mockWorkOutputs, mockEmployees } from "@/lib/mockData";
 import type { AttendanceRecord, WorkOutput, Employee, AttendanceStatus } from "@/types";
-import { CalendarCheck, ListTodo, User, Search, Filter, Download } from "lucide-react";
+import { CalendarCheck, ListTodo, User, Search, Filter, Download, PlusCircle } from "lucide-react";
 import { format } from "date-fns";
 
 export default function ProgressMonitorPage() {
