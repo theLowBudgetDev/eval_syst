@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -11,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, Users, BellRing, Palette, Settings2, ShieldAlert, DatabaseZap, MessageCircle, Info, History } from "lucide-react";
+import { Save, Users, BellRing, Palette, Settings2, ShieldAlert, MessageCircle, Info, History } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -183,7 +182,7 @@ export default function AdminSettingsPage() {
                 <div className="flex items-center gap-3 w-full">
                     <Settings2 className="h-6 w-6 text-primary flex-shrink-0" />
                     <div className="flex-1 text-left">
-                        <CardTitle className="text-lg">Evaluation & Progress Settings</CardTitle>
+                        <CardTitle className="text-lg">Evaluation &amp; Progress Settings</CardTitle>
                         <CardDescription className="text-sm text-muted-foreground">Manage criteria, review cycles, and progress tracking.</CardDescription>
                     </div>
                 </div>
@@ -201,37 +200,13 @@ export default function AdminSettingsPage() {
           </Card>
         </AccordionItem>
 
-        <AccordionItem value="data-integrations">
-          <Card className="shadow-md border-border">
-             <AccordionTrigger className="p-6 hover:no-underline">
-                <div className="flex items-center gap-3 w-full">
-                    <DatabaseZap className="h-6 w-6 text-primary flex-shrink-0" />
-                    <div className="flex-1 text-left">
-                        <CardTitle className="text-lg">Data & Integrations</CardTitle>
-                        <CardDescription className="text-sm text-muted-foreground">Manage data backups, exports, and external integrations.</CardDescription>
-                    </div>
-                </div>
-            </AccordionTrigger>
-            <AccordionContent>
-              <Separator />
-              <CardContent className="pt-6 space-y-4">
-                 <p className="text-muted-foreground">Data backup, export, and integration settings will appear here.</p>
-                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => router.push('/admin/data-backup')} disabled={isSaving}>Backup Data</Button>
-                    <Button variant="outline" onClick={() => router.push('/admin/integrations')} disabled={isSaving}>Manage Integrations</Button>
-                 </div>
-              </CardContent>
-            </AccordionContent>
-          </Card>
-        </AccordionItem>
-
          <AccordionItem value="security-compliance">
           <Card className="shadow-md border-border">
              <AccordionTrigger className="p-6 hover:no-underline">
                 <div className="flex items-center gap-3 w-full">
                     <ShieldAlert className="h-6 w-6 text-primary flex-shrink-0" />
                     <div className="flex-1 text-left">
-                        <CardTitle className="text-lg">Security & Compliance</CardTitle>
+                        <CardTitle className="text-lg">Security &amp; Compliance</CardTitle>
                         <CardDescription className="text-sm text-muted-foreground">Configure security policies and view audit logs.</CardDescription>
                     </div>
                 </div>
