@@ -113,7 +113,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
 
   return (
     <TooltipProvider>
-      <SidebarProvider defaultOpen={true}>
+      <SidebarProvider defaultOpen={false}>
         <Sidebar collapsible="icon" className="hidden md:flex border-r border-sidebar-border">
           <CustomSidebarHeader className="p-4 flex items-center justify-center border-b border-sidebar-border">
              <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
