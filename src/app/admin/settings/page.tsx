@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -10,54 +11,111 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, Users, BellRing, Palette, Settings2, ShieldAlert, MessageCircle, Info, History } from "lucide-react";
+import { Save, Users, BellRing, Palette, Settings2, ShieldAlert, History, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import type { SystemSetting } from "@/types";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const DEFAULT_SETTINGS: Omit<SystemSetting, 'id' | 'createdAt' | 'updatedAt'> = {
+  appName: "EvalTrack",
+  systemTheme: "system",
+  maintenanceMode: false,
+  notificationsEnabled: true,
+  emailNotifications: true,
+};
 
 export default function AdminSettingsPage() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: authIsLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
-  const [appName, setAppName] = React.useState("EvalTrack");
-  const [systemTheme, setSystemTheme] = React.useState("system");
-  const [maintenanceMode, setMaintenanceMode] = React.useState(false);
-
-  const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
-  const [emailNotifications, setEmailNotifications] = React.useState(true);
-  
+  const [settings, setSettings] = React.useState<Omit<SystemSetting, 'id' | 'createdAt' | 'updatedAt'>>(DEFAULT_SETTINGS);
+  const [isLoadingSettings, setIsLoadingSettings] = React.useState(true);
   const [isSaving, setIsSaving] = React.useState(false);
 
   React.useEffect(() => {
-    if (!isLoading && user && user.role !== 'ADMIN') {
-      router.push('/login'); 
+    if (!authIsLoading && user && user.role === 'ADMIN') {
+      setIsLoadingSettings(true);
+      const headers = new Headers();
+      headers.append('X-User-Id', user.id);
+      headers.append('X-User-Role', user.role);
+
+      fetch('/api/admin/settings', { headers })
+        .then(async res => {
+          if (!res.ok) {
+            const errorBody = await res.json().catch(() => ({ message: "Failed to fetch settings" }));
+            throw new Error(errorBody.message);
+          }
+          return res.json();
+        })
+        .then((data: SystemSetting) => {
+          const { id, createdAt, updatedAt, ...rest } = data;
+          setSettings(rest);
+        })
+        .catch(error => {
+          toast({ title: "Error Loading Settings", description: (error as Error).message, variant: "destructive" });
+          setSettings(DEFAULT_SETTINGS); // Fallback to defaults on error
+        })
+        .finally(() => setIsLoadingSettings(false));
+    } else if (!authIsLoading && (!user || user.role !== 'ADMIN')) {
+      router.push('/login');
     }
-  }, [user, isLoading, router]);
+  }, [user, authIsLoading, router, toast]);
 
-  if (isLoading || !user || user.role !== 'ADMIN') {
-    return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
-  }
+  const handleInputChange = (field: keyof typeof settings, value: string | boolean) => {
+    setSettings(prev => ({ ...prev, [field]: value }));
+  };
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
+    if (!user) return;
     setIsSaving(true);
-    // In a real app, this would save to a backend via API
-    console.log("Saving Admin Settings:", {
-      appName,
-      systemTheme,
-      maintenanceMode,
-      notificationsEnabled,
-      emailNotifications,
-    });
-    setTimeout(() => {
+    
+    const headers = new Headers();
+    headers.append('X-User-Id', user.id);
+    headers.append('X-User-Role', user.role);
+    headers.append('Content-Type', 'application/json');
+
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(settings),
+      });
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => ({ message: "Failed to save settings" }));
+        throw new Error(errorBody.message);
+      }
+      const updatedSettings: SystemSetting = await res.json();
+      const { id, createdAt, updatedAt, ...rest } = updatedSettings;
+      setSettings(rest);
       toast({
           title: "Settings Saved",
-          description: "Your changes to the admin settings have been successfully saved (simulated).",
+          description: "Your changes to the system settings have been successfully saved.",
       });
+    } catch (error) {
+      toast({ title: "Error Saving Settings", description: (error as Error).message, variant: "destructive" });
+    } finally {
       setIsSaving(false);
-    }, 1000);
+    }
   };
   
+  if (authIsLoading || isLoadingSettings) {
+    return (
+        <div className="space-y-8">
+            <PageHeader title="Admin Settings" description="Manage system-wide configurations."/>
+            <Skeleton className="h-12 w-32" /> {/* For Save Button */}
+            <Card className="shadow-md"><CardHeader><Skeleton className="h-6 w-1/2"/></CardHeader><CardContent><Skeleton className="h-20 w-full"/></CardContent></Card>
+            <Card className="shadow-md"><CardHeader><Skeleton className="h-6 w-1/2"/></CardHeader><CardContent><Skeleton className="h-20 w-full"/></CardContent></Card>
+        </div>
+    );
+  }
+
+  if (!user || user.role !== 'ADMIN') {
+    // This case should be handled by the useEffect redirect, but as a fallback:
+    return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
+  }
 
   return (
     <div className="space-y-8">
@@ -65,8 +123,8 @@ export default function AdminSettingsPage() {
         title="Admin Settings"
         description="Manage system-wide configurations and perform administrative tasks."
         actions={
-          <Button onClick={handleSaveChanges} disabled={isSaving}>
-            {isSaving ? <Save className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+          <Button onClick={handleSaveChanges} disabled={isSaving || isLoadingSettings}>
+            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
              Save All Changes
           </Button>
         }
@@ -75,7 +133,7 @@ export default function AdminSettingsPage() {
       <Accordion type="multiple" defaultValue={["general", "notifications"]} className="w-full space-y-4">
         <AccordionItem value="general">
           <Card className="shadow-md border-border">
-            <AccordionTrigger className="p-6 hover:no-underline">
+            <AccordionTrigger className="p-6 hover:no-underline w-full">
                 <div className="flex items-center gap-3 w-full">
                     <Palette className="h-6 w-6 text-primary flex-shrink-0" />
                     <div className="flex-1 text-left">
@@ -89,11 +147,11 @@ export default function AdminSettingsPage() {
               <CardContent className="pt-6 space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="appName">Application Name</Label>
-                  <Input id="appName" value={appName} onChange={(e) => setAppName(e.target.value)} disabled={isSaving} />
+                  <Input id="appName" value={settings.appName} onChange={(e) => handleInputChange('appName', e.target.value)} disabled={isSaving} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="systemTheme">Default System Theme</Label>
-                  <Select value={systemTheme} onValueChange={setSystemTheme} disabled={isSaving}>
+                  <Select value={settings.systemTheme} onValueChange={(value) => handleInputChange('systemTheme', value)} disabled={isSaving}>
                     <SelectTrigger id="systemTheme">
                       <SelectValue placeholder="Select theme" />
                     </SelectTrigger>
@@ -109,7 +167,7 @@ export default function AdminSettingsPage() {
                     <h4 className="font-medium">Maintenance Mode</h4>
                     <p className="text-sm text-muted-foreground">Temporarily disable access for non-admin users.</p>
                   </div>
-                  <Switch checked={maintenanceMode} onCheckedChange={setMaintenanceMode} disabled={isSaving} />
+                  <Switch checked={settings.maintenanceMode} onCheckedChange={(checked) => handleInputChange('maintenanceMode', checked)} disabled={isSaving} />
                 </div>
               </CardContent>
             </AccordionContent>
@@ -118,7 +176,7 @@ export default function AdminSettingsPage() {
 
         <AccordionItem value="user-management">
           <Card className="shadow-md border-border">
-             <AccordionTrigger className="p-6 hover:no-underline">
+             <AccordionTrigger className="p-6 hover:no-underline w-full">
                 <div className="flex items-center gap-3 w-full">
                     <Users className="h-6 w-6 text-primary flex-shrink-0" />
                     <div className="flex-1 text-left">
@@ -142,7 +200,7 @@ export default function AdminSettingsPage() {
 
         <AccordionItem value="notifications">
           <Card className="shadow-md border-border">
-             <AccordionTrigger className="p-6 hover:no-underline">
+             <AccordionTrigger className="p-6 hover:no-underline w-full">
                  <div className="flex items-center gap-3 w-full">
                     <BellRing className="h-6 w-6 text-primary flex-shrink-0" />
                     <div className="flex-1 text-left">
@@ -159,17 +217,17 @@ export default function AdminSettingsPage() {
                     <h4 className="font-medium">Enable System Notifications</h4>
                     <p className="text-sm text-muted-foreground">Allow the system to generate in-app notifications.</p>
                   </div>
-                  <Switch checked={notificationsEnabled} onCheckedChange={setNotificationsEnabled} disabled={isSaving}/>
+                  <Switch checked={settings.notificationsEnabled} onCheckedChange={(checked) => handleInputChange('notificationsEnabled', checked)} disabled={isSaving}/>
                 </div>
                  <div className="flex items-center justify-between rounded-lg border p-4">
                   <div>
                     <h4 className="font-medium">Enable Email Notifications</h4>
                     <p className="text-sm text-muted-foreground">Allow the system to send email notifications (if configured).</p>
                   </div>
-                  <Switch checked={emailNotifications} onCheckedChange={setEmailNotifications} disabled={isSaving}/>
+                  <Switch checked={settings.emailNotifications} onCheckedChange={(checked) => handleInputChange('emailNotifications', checked)} disabled={isSaving}/>
                 </div>
                 <Button variant="outline" onClick={() => router.push('/messaging')}>
-                    <MessageCircle className="mr-2 h-4 w-4" /> Configure Auto-Messaging Triggers
+                     Configure Auto-Messaging Triggers
                 </Button>
               </CardContent>
             </AccordionContent>
@@ -178,7 +236,7 @@ export default function AdminSettingsPage() {
         
         <AccordionItem value="evaluation-settings">
           <Card className="shadow-md border-border">
-             <AccordionTrigger className="p-6 hover:no-underline">
+             <AccordionTrigger className="p-6 hover:no-underline w-full">
                 <div className="flex items-center gap-3 w-full">
                     <Settings2 className="h-6 w-6 text-primary flex-shrink-0" />
                     <div className="flex-1 text-left">
@@ -202,7 +260,7 @@ export default function AdminSettingsPage() {
 
          <AccordionItem value="security-compliance">
           <Card className="shadow-md border-border">
-             <AccordionTrigger className="p-6 hover:no-underline">
+             <AccordionTrigger className="p-6 hover:no-underline w-full">
                 <div className="flex items-center gap-3 w-full">
                     <ShieldAlert className="h-6 w-6 text-primary flex-shrink-0" />
                     <div className="flex-1 text-left">

@@ -1,6 +1,6 @@
 
 import { PrismaClient } from '@prisma/client';
-import type { UserRoleType, AttendanceStatusType, MessageEventType, GoalStatusType, AuditActionType } from '../src/types';
+import type { UserRoleType, AttendanceStatusType, MessageEventType, GoalStatusType, AuditActionType, SystemSetting } from '../src/types';
 import { mockAuthUsers } from '../src/contexts/AuthContext'; 
 import {
   mockEvaluationCriteria,
@@ -11,6 +11,7 @@ import {
 } from '../src/lib/mockData'; 
 
 const prisma = new PrismaClient();
+const GLOBAL_SETTINGS_ID = "global_settings";
 
 async function main() {
   console.log('Start seeding ...');
@@ -23,8 +24,24 @@ async function main() {
   await prisma.attendanceRecord.deleteMany();
   await prisma.autoMessageTrigger.deleteMany();
   await prisma.evaluationCriteria.deleteMany();
+  await prisma.systemSetting.deleteMany(); // Clear system settings
   await prisma.user.deleteMany({ where: { supervisorId: { not: null } } }); 
   await prisma.user.deleteMany({ where: { supervisorId: null } }); 
+
+  // Seed System Settings
+  await prisma.systemSetting.upsert({
+    where: { id: GLOBAL_SETTINGS_ID },
+    update: {}, // No update needed if it exists, just ensure it's there
+    create: {
+      id: GLOBAL_SETTINGS_ID,
+      appName: "EvalTrack Pro",
+      systemTheme: "dark",
+      maintenanceMode: false,
+      notificationsEnabled: true,
+      emailNotifications: true,
+    },
+  });
+  console.log('Seeded system settings.');
 
 
   const supervisorUsers = mockAuthUsers.filter(u => u.role === 'SUPERVISOR');
@@ -222,40 +239,43 @@ async function main() {
   console.log('Seeded goals.');
 
   // Seed Audit Logs
-  const adminUserId = createdUsersMap[adminUsers[0].id];
-  const supervisorUserId = createdUsersMap[supervisorUsers[0].id];
+  const adminUserIdForLog = adminUsers[0] ? createdUsersMap[adminUsers[0].id] : null;
+  const supervisorUserIdForLog = supervisorUsers[0] ? createdUsersMap[supervisorUsers[0].id] : null;
+  const employeeUserIdForLog = employeeUsers[0] ? createdUsersMap[employeeUsers[0].id] : null;
 
-  if (adminUserId) {
+
+  if (adminUserIdForLog) {
     await prisma.auditLog.create({
       data: {
-        userId: adminUserId,
+        userId: adminUserIdForLog,
         action: "USER_LOGIN" as AuditActionType,
         details: { ipAddress: "192.168.1.100", userAgent: "Chrome/90.0" }
       }
     });
     await prisma.auditLog.create({
       data: {
-        userId: adminUserId,
-        action: "SETTINGS_UPDATE" as AuditActionType,
-        targetType: "Application",
-        details: { changedField: "appName", oldValue: "OldName", newValue: "EvalTrack" }
+        userId: adminUserIdForLog,
+        action: "SYSTEM_SETTINGS_UPDATE" as AuditActionType,
+        targetType: "SystemSetting",
+        targetId: GLOBAL_SETTINGS_ID,
+        details: { changedField: "appName", oldValue: "OldName", newValue: "EvalTrack Pro" }
       }
     });
   }
-  if (supervisorUserId && createdUsersMap[employeeUsers[0].id]) {
+  if (supervisorUserIdForLog && employeeUserIdForLog) {
      await prisma.auditLog.create({
       data: {
-        userId: supervisorUserId,
+        userId: supervisorUserIdForLog,
         action: "EVALUATION_CREATE" as AuditActionType,
         targetType: "PerformanceScore",
-        targetId: "mockScoreId1", // Replace with actual ID if available after score seeding
+        targetId: "mockScoreId1", 
         details: { employeeEvaluated: employeeUsers[0].name }
       }
     });
   }
    await prisma.auditLog.create({
       data: {
-        action: "SYSTEM_STARTUP" as AuditActionType, // Example of a system event
+        action: "SYSTEM_STARTUP" as AuditActionType, 
         details: { message: "System initialized successfully." }
       }
     });

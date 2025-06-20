@@ -2,44 +2,43 @@
 datasource db {
   provider = "sqlite"
   url      = "file:./dev.db"
-  // Explicitly specifying binaryTargets can sometimes help in environments where detection fails.
-  // native is usually sufficient, but adding a specific openssl target if issues persist.
-  binaryTargets = ["native", "debian-openssl-1.1.x"]
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+  binaryTargets   = ["native", "debian-openssl-1.1.x"]
 }
 
 model User {
-  id                        String    @id @default(cuid())
-  name                      String
-  email                     String    @unique
-  department                String
-  position                  String
-  hireDate                  DateTime
-  avatarUrl                 String?
-  role                      String    // Was UserRole enum
-  supervisorId              String?
-  supervisor                User?     @relation("SupervisedBy", fields: [supervisorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  supervisedEmployees       User[]    @relation("SupervisedBy")
-  performanceScoresReceived PerformanceScore[] @relation("ScoresReceived")
-  performanceScoresGiven    PerformanceScore[] @relation("ScoresGiven")
-  workOutputs               WorkOutput[]
-  attendanceRecords         AttendanceRecord[]
-  goalsAsEmployee           Goal[]    @relation("GoalsForEmployee")
-  goalsAsSupervisor         Goal[]    @relation("GoalsSupervised")
-  auditLogs                 AuditLog[] @relation("AuditLogByUser")
+  id                      String    @id @default(cuid())
+  name                    String
+  email                   String    @unique
+  department              String
+  position                String
+  hireDate                DateTime
+  avatarUrl               String?
+  role                    String // Was UserRole enum; now String for SQLite compatibility
+  supervisorId            String?
+  supervisor              User?     @relation("EmployeeSupervisor", fields: [supervisorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  supervisedEmployees     User[]    @relation("EmployeeSupervisor")
+  performanceScoresGiven  PerformanceScore[] @relation("EvaluatorScores")
+  performanceScoresReceived PerformanceScore[] @relation("EmployeeScores")
+  workOutputs             WorkOutput[]
+  attendanceRecords       AttendanceRecord[]
+  goalsAsEmployee         Goal[]    @relation("EmployeeGoals")
+  goalsAsSupervisor       Goal[]    @relation("SupervisorGoals")
+  auditLogs               AuditLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model EvaluationCriteria {
-  id                String   @id @default(cuid())
+  id                String             @id @default(cuid())
   name              String
   description       String
-  weight            Float?
+  weight            Float? // Weight from 0.0 to 1.0
   performanceScores PerformanceScore[]
 
   createdAt DateTime @default(now())
@@ -47,23 +46,19 @@ model EvaluationCriteria {
 }
 
 model PerformanceScore {
-  id             String   @id @default(cuid())
-  employeeId     String
-  employee       User     @relation("ScoresReceived", fields: [employeeId], references: [id], onDelete: Cascade)
-  criteriaId     String
-  criteria       EvaluationCriteria @relation(fields: [criteriaId], references: [id], onDelete:Restrict)
-  score          Int
-  comments       String?
-  evaluationDate DateTime
-  evaluatorId    String? // Can be null if system generated or if evaluator is deleted
-  evaluator      User?    @relation("ScoresGiven", fields: [evaluatorId], references: [id], onDelete:SetNull)
+  id              String             @id @default(cuid())
+  employeeId      String
+  employee        User               @relation("EmployeeScores", fields: [employeeId], references: [id], onDelete: Cascade)
+  criteriaId      String
+  criteria        EvaluationCriteria @relation(fields: [criteriaId], references: [id], onDelete: Cascade)
+  score           Int // Score from 1 to 5
+  comments        String?
+  evaluationDate  DateTime
+  evaluatorId     String? // Can be null if system-generated or if evaluator is deleted
+  evaluator       User?              @relation("EvaluatorScores", fields: [evaluatorId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  @@index([employeeId])
-  @@index([criteriaId])
-  @@index([evaluatorId])
 }
 
 model WorkOutput {
@@ -77,66 +72,68 @@ model WorkOutput {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  @@index([employeeId])
 }
 
 model AttendanceRecord {
-  id         String   @id @default(cuid())
+  id         String  @id @default(cuid())
   employeeId String
-  employee   User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee   User    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   date       DateTime
-  status     String   // Was AttendanceStatus enum
+  status     String // Was AttendanceStatus enum; now String
   notes      String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  @@index([employeeId, date])
 }
 
-
 model AutoMessageTrigger {
-  id                String   @id @default(cuid())
-  eventName         String   // Was MessageEventType enum
-  messageTemplate   String
-  isActive          Boolean  @default(true)
-  daysBeforeEvent   Int?
+  id              String   @id @default(cuid())
+  eventName       String // Was MessageEventType enum; now String
+  messageTemplate String
+  isActive        Boolean  @default(true)
+  daysBeforeEvent Int? // Optional: number of days before the event to trigger
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Goal {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   title         String
   description   String?
-  status        String    // Was GoalStatusType enum e.g., "NOT_STARTED", "IN_PROGRESS", "COMPLETED"
+  status        String   // Was GoalStatusType enum; now String
   dueDate       DateTime?
   employeeId    String
-  employee      User      @relation("GoalsForEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  employee      User     @relation("EmployeeGoals", fields: [employeeId], references: [id], onDelete: Cascade)
   supervisorId  String?
-  supervisor    User?     @relation("GoalsSupervised", fields: [supervisorId], references: [id], onDelete:SetNull)
+  supervisor    User?    @relation("SupervisorGoals", fields: [supervisorId], references: [id], onDelete: SetNull)
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  @@index([employeeId])
-  @@index([supervisorId])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model AuditLog {
-  id          String    @id @default(cuid())
-  timestamp   DateTime  @default(now())
-  userId      String?   // User who performed the action, if applicable
-  user        User?     @relation("AuditLogByUser", fields: [userId], references: [id], onDelete:SetNull)
-  action      String    // e.g., "USER_LOGIN", "EMPLOYEE_UPDATE", "GOAL_CREATE"
-  targetType  String?   // e.g., "User", "Goal"
-  targetId    String?   // ID of the entity affected
-  details     Json?     // Store additional details about the action, like old/new values
+  id          String   @id @default(cuid())
+  timestamp   DateTime @default(now())
+  userId      String? // User who performed the action (null for system actions)
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action      String   // Was AuditActionType enum; now String
+  targetType  String?  // e.g., "User", "Goal", "EvaluationCriteria"
+  targetId    String?  // ID of the entity affected
+  details     Json?    // Additional context, e.g., { oldValue: "X", newValue: "Y" }
 
-  @@index([userId])
-  @@index([action])
-  @@index([targetType, targetId])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
+model SystemSetting {
+  id                    String    @id @default("global_settings") // Use a fixed ID for the single row
+  appName               String    @default("EvalTrack")
+  systemTheme           String    @default("system") // "light", "dark", "system"
+  maintenanceMode       Boolean   @default(false)
+  notificationsEnabled  Boolean   @default(true)
+  emailNotifications    Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

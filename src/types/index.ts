@@ -137,7 +137,8 @@ export type AuditActionType =
   | "TRIGGER_CREATE" | "TRIGGER_UPDATE" | "TRIGGER_DELETE"
   | "CRITERIA_CREATE" | "CRITERIA_UPDATE" | "CRITERIA_DELETE"
   | "ATTENDANCE_CREATE" | "ATTENDANCE_UPDATE" | "ATTENDANCE_DELETE"
-  | "WORK_OUTPUT_CREATE" | "WORK_OUTPUT_UPDATE" | "WORK_OUTPUT_DELETE";
+  | "WORK_OUTPUT_CREATE" | "WORK_OUTPUT_UPDATE" | "WORK_OUTPUT_DELETE"
+  | "SYSTEM_STARTUP" | "SYSTEM_SETTINGS_UPDATE";
 
 
 export interface AuditLog {
@@ -151,3 +152,13 @@ export interface AuditLog {
   details?: any | null; // JSON or string for additional context
 }
 
+export interface SystemSetting {
+  id: string; // Should always be "global_settings"
+  appName: string;
+  systemTheme: string; // "light", "dark", "system"
+  maintenanceMode: boolean;
+  notificationsEnabled: boolean;
+  emailNotifications: boolean;
+  createdAt: string; // ISO date string
+  updatedAt: string; // ISO date string
+}
