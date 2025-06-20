@@ -21,7 +21,7 @@ import { navLinks, type NavLink as NavLinkType } from '@/lib/navigation';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu } from 'lucide-react';
+import { Menu, SettingsIcon } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'EvalTrack - Performance Management',
