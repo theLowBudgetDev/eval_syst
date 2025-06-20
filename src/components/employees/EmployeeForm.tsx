@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -24,6 +25,8 @@ import {
 } from "@/components/ui/select";
 import type { Employee, Supervisor } from "@/types";
 
+const NO_SUPERVISOR_VALUE = "--NONE--";
+
 // Zod schema for form validation
 const employeeSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -31,7 +34,7 @@ const employeeSchema = z.object({
   department: z.string().min(1, "Department is required"),
   position: z.string().min(1, "Position is required"),
   hireDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
-  supervisorId: z.string().optional(),
+  supervisorId: z.string().optional(), // Will store actual ID or empty string from form
   avatarUrl: z.string().url("Invalid URL for avatar").optional().or(z.literal('')),
 });
 
@@ -60,56 +63,50 @@ export function EmployeeForm({
     formState: { errors },
   } = useForm<EmployeeFormData>({
     resolver: zodResolver(employeeSchema),
-    defaultValues: employee
-      ? {
+    defaultValues: {
+      name: "",
+      email: "",
+      department: "",
+      position: "",
+      hireDate: new Date().toISOString().split('T')[0],
+      supervisorId: "", // react-hook-form state uses "" for no supervisor
+      avatarUrl: "",
+    },
+  });
+
+  React.useEffect(() => {
+    if (isOpen) { // Reset form only when dialog opens or employee changes
+      if (employee) {
+        reset({
           name: employee.name,
           email: employee.email,
           department: employee.department,
           position: employee.position,
           hireDate: employee.hireDate,
-          supervisorId: employee.supervisorId || "",
+          supervisorId: employee.supervisorId || "", // Ensure "" if undefined
           avatarUrl: employee.avatarUrl || "",
-        }
-      : {
+        });
+      } else {
+        reset({
           name: "",
           email: "",
           department: "",
           position: "",
-          hireDate: new Date().toISOString().split('T')[0], // Default to today
+          hireDate: new Date().toISOString().split('T')[0],
           supervisorId: "",
           avatarUrl: "",
-        },
-  });
-
-  React.useEffect(() => {
-    if (employee) {
-      reset({
-        name: employee.name,
-        email: employee.email,
-        department: employee.department,
-        position: employee.position,
-        hireDate: employee.hireDate,
-        supervisorId: employee.supervisorId || "",
-        avatarUrl: employee.avatarUrl || "",
-      });
-    } else {
-      reset({
-        name: "",
-        email: "",
-        department: "",
-        position: "",
-        hireDate: new Date().toISOString().split('T')[0],
-        supervisorId: "",
-        avatarUrl: "",
-      });
+        });
+      }
     }
   }, [employee, reset, isOpen]);
 
   const handleFormSubmit = (data: EmployeeFormData) => {
+    // data.supervisorId will be "" if "No Supervisor" was selected, or actual ID.
     const supervisor = supervisors.find(s => s.id === data.supervisorId);
     const submissionData: Employee = {
       ...data,
-      id: employee?.id || "", // ID will be handled by parent or backend
+      id: employee?.id || `emp${Date.now()}`, // Basic ID generation for new employee
+      supervisorId: data.supervisorId === "" ? undefined : data.supervisorId, // Store undefined in actual data if no supervisor
       supervisorName: supervisor?.name,
     };
     onSubmit(submissionData);
@@ -163,12 +160,17 @@ export function EmployeeForm({
                 name="supervisorId"
                 control={control}
                 render={({ field }) => (
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    value={field.value === "" ? NO_SUPERVISOR_VALUE : field.value}
+                    onValueChange={(value) => {
+                      field.onChange(value === NO_SUPERVISOR_VALUE ? "" : value);
+                    }}
+                  >
                     <SelectTrigger className="mt-1">
                       <SelectValue placeholder="Select a supervisor" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">No Supervisor</SelectItem>
+                      <SelectItem value={NO_SUPERVISOR_VALUE}>No Supervisor</SelectItem>
                       {supervisors.map((sup) => (
                         <SelectItem key={sup.id} value={sup.id}>
                           {sup.name}

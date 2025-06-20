@@ -33,9 +33,11 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { mockEmployees, mockSupervisors } from "@/lib/mockData";
-import type { Employee, Supervisor, SupervisorAssignment } from "@/types";
+import type { Employee, SupervisorAssignment } from "@/types"; // Removed Supervisor type as it's not directly used for state here
 import { UserPlus, UserCheck, Edit, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+const NO_SUPERVISOR_VALUE = "--NONE--";
 
 export default function SupervisorAssignmentsPage() {
   const [assignments, setAssignments] = React.useState<Employee[]>(
@@ -52,23 +54,24 @@ export default function SupervisorAssignmentsPage() {
 
   const handleOpenAssignDialog = (employee: Employee) => {
     setSelectedEmployee(employee);
-    setSelectedSupervisorId(employee.supervisorId);
+    setSelectedSupervisorId(employee.supervisorId); // This can be undefined
     setIsAssignDialogOpen(true);
   };
 
   const handleAssignSupervisor = () => {
-    if (selectedEmployee && selectedSupervisorId) {
+    if (selectedEmployee && selectedSupervisorId && selectedSupervisorId !== NO_SUPERVISOR_VALUE) {
+      const supervisorName = mockSupervisors.find(s => s.id === selectedSupervisorId)?.name || "N/A";
       const updatedAssignments = assignments.map((emp) =>
         emp.id === selectedEmployee.id
-          ? { ...emp, supervisorId: selectedSupervisorId, supervisorName: mockSupervisors.find(s => s.id === selectedSupervisorId)?.name || "N/A" }
+          ? { ...emp, supervisorId: selectedSupervisorId, supervisorName: supervisorName }
           : emp
       );
       setAssignments(updatedAssignments);
       toast({
         title: "Supervisor Assigned",
-        description: `${mockSupervisors.find(s => s.id === selectedSupervisorId)?.name} assigned to ${selectedEmployee.name}.`,
+        description: `${supervisorName} assigned to ${selectedEmployee.name}.`,
       });
-    } else if (selectedEmployee && !selectedSupervisorId) {
+    } else if (selectedEmployee && (!selectedSupervisorId || selectedSupervisorId === NO_SUPERVISOR_VALUE)) { // Handles undefined or our special value
        const updatedAssignments = assignments.map((emp) =>
         emp.id === selectedEmployee.id
           ? { ...emp, supervisorId: undefined, supervisorName: "N/A" }
@@ -173,14 +176,16 @@ export default function SupervisorAssignmentsPage() {
             <div className="py-4 space-y-2">
               <Label htmlFor="supervisor">Supervisor</Label>
               <Select
-                value={selectedSupervisorId}
-                onValueChange={setSelectedSupervisorId}
+                value={selectedSupervisorId === undefined ? NO_SUPERVISOR_VALUE : selectedSupervisorId}
+                onValueChange={(value) => {
+                  setSelectedSupervisorId(value === NO_SUPERVISOR_VALUE ? undefined : value);
+                }}
               >
                 <SelectTrigger id="supervisor">
                   <SelectValue placeholder="Select a supervisor" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">
+                  <SelectItem value={NO_SUPERVISOR_VALUE}>
                     <em>Unassign (No Supervisor)</em>
                   </SelectItem>
                   {mockSupervisors.map((supervisor) => (
