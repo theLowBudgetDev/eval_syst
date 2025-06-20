@@ -14,9 +14,7 @@ export async function POST(request: Request) {
 
     const user = await prisma.user.findUnique({
       where: { email },
-      include: { // Include supervisor details if needed for the AppUser type
-        supervisor: true,
-      }
+      // No need to include supervisor here initially, fetch separately if needed and select fields
     });
 
     if (!user) {
@@ -27,6 +25,19 @@ export async function POST(request: Request) {
         },
       });
       return NextResponse.json({ message: 'Invalid email or password' }, { status: 401 });
+    }
+
+    // Ensure user.password is not null or undefined before bcrypt.compare
+    if (!user.password) {
+        // This case should ideally not happen if password is required in your schema and data integrity is maintained
+        console.error(`User ${user.email} has no password set.`);
+        await prisma.auditLog.create({
+            data: {
+              action: 'AUTH_LOGIN_FAILURE',
+              details: { email, reason: 'User has no password in database' },
+            },
+        });
+        return NextResponse.json({ message: 'Authentication error. Please contact support.' }, { status: 500 });
     }
 
     const passwordMatch = await bcrypt.compare(password, user.password);
@@ -43,15 +54,13 @@ export async function POST(request: Request) {
     }
 
     // Construct the user object to return, excluding the password
-    // Ensure this matches the AppUser type expected by the client
     const { password: _, ...userWithoutPassword } = user;
 
-    // Re-fetch supervisor with select to avoid sending supervisor's password hash if it exists
     let supervisorDetails: AppUser['supervisor'] = null;
     if (user.supervisorId) {
         const supervisor = await prisma.user.findUnique({
             where: {id: user.supervisorId},
-            select: {
+            select: { // Explicitly select non-sensitive fields for the supervisor
                 id: true,
                 name: true,
                 email: true,
@@ -77,7 +86,8 @@ export async function POST(request: Request) {
       hireDate: user.hireDate.toISOString(), // Ensure date is string for client
       supervisor: supervisorDetails,
       // Explicitly set other optional fields from AppUser to null/undefined if not present
-      supervisedEmployees: undefined, // These are typically fetched on demand
+      // These are typically fetched on demand or not needed for initial login context
+      supervisedEmployees: undefined, 
       performanceScoresReceived: undefined,
       performanceScoresGiven: undefined,
       workOutputs: undefined,
@@ -100,12 +110,14 @@ export async function POST(request: Request) {
 
   } catch (error) {
     console.error('Login error:', error);
+    // Log generic error to audit log if specific user context is not available
     await prisma.auditLog.create({
       data: {
         action: 'AUTH_LOGIN_FAILURE',
         details: { error: (error as Error).message, reason: 'Server error during login attempt' },
       },
-    });
+    }).catch(auditError => console.error('Failed to write audit log for login error:', auditError)); // Avoid crashing if audit log fails
+    
     return NextResponse.json({ message: 'An internal server error occurred' }, { status: 500 });
   }
 }

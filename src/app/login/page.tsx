@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import type { AppUser } from "@/types";
 import { useRouter } from "next/navigation";
-import { LogIn, Loader2, AlertTriangle } from "lucide-react";
+import { LogIn, Loader2, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -28,6 +28,7 @@ export default function LoginPage() {
   const { login, user, isLoading: authIsLoading } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = React.useState(false);
   const [loginError, setLoginError] = React.useState<string | null>(null);
+  const [showPassword, setShowPassword] = React.useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -60,17 +61,14 @@ export default function LoginPage() {
       if (!response.ok) {
         let errorMessage = 'Login failed. Please check your credentials.';
         try {
-          // Attempt to parse error JSON only if response was not ok
           const errorResult = await response.json();
           errorMessage = errorResult.message || errorMessage;
         } catch (e) {
-          // If parsing error JSON fails, stick to a generic message or use response.statusText
-          errorMessage = `Login failed (status ${response.status}): ${response.statusText || 'Server error'}`;
+           errorMessage = `Login failed (status ${response.status}): ${response.statusText || 'Server error'}`;
         }
         throw new Error(errorMessage);
       }
 
-      // If response.ok is true, then we can safely parse the JSON.
       const result = await response.json();
       login(result as AppUser); 
 
@@ -86,6 +84,8 @@ export default function LoginPage() {
       setIsLoggingIn(false);
     }
   };
+
+  const togglePasswordVisibility = () => setShowPassword(!showPassword);
 
   if (authIsLoading) {
     return (
@@ -145,14 +145,28 @@ export default function LoginPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                {...register("password")}
-                disabled={isLoggingIn}
-                autoComplete="current-password"
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  {...register("password")}
+                  disabled={isLoggingIn}
+                  autoComplete="current-password"
+                  className="pr-10" 
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute inset-y-0 right-0 h-full px-3 text-muted-foreground hover:text-foreground"
+                  onClick={togglePasswordVisibility}
+                  disabled={isLoggingIn}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
               {errors.password && <p className="text-sm text-destructive mt-1">{errors.password.message}</p>}
             </div>
             <Button type="submit" className="w-full" disabled={isLoggingIn}>
