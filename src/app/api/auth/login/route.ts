@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       await prisma.auditLog.create({
         data: {
           action: 'AUTH_LOGIN_FAILURE',
-          details: { email, reason: 'User not found' },
+          details: JSON.stringify({ email, reason: 'User not found' }),
         },
       });
       return NextResponse.json({ message: 'Invalid email or password' }, { status: 401 });
@@ -29,12 +29,11 @@ export async function POST(request: Request) {
 
     // Ensure user.password is not null or undefined before bcrypt.compare
     if (!user.password) {
-        // This case should ideally not happen if password is required in your schema and data integrity is maintained
         console.error(`User ${user.email} has no password set.`);
         await prisma.auditLog.create({
             data: {
               action: 'AUTH_LOGIN_FAILURE',
-              details: { email, reason: 'User has no password in database' },
+              details: JSON.stringify({ email, reason: 'User has no password in database' }),
             },
         });
         return NextResponse.json({ message: 'Authentication error. Please contact support.' }, { status: 500 });
@@ -47,7 +46,7 @@ export async function POST(request: Request) {
         data: {
           userId: user.id,
           action: 'AUTH_LOGIN_FAILURE',
-          details: { email: user.email, reason: 'Password mismatch' },
+          details: JSON.stringify({ email: user.email, reason: 'Password mismatch' }),
         },
       });
       return NextResponse.json({ message: 'Invalid email or password' }, { status: 401 });
@@ -102,7 +101,7 @@ export async function POST(request: Request) {
       data: {
         userId: user.id,
         action: 'AUTH_LOGIN_SUCCESS',
-        details: { email: user.email },
+        details: JSON.stringify({ email: user.email }),
       },
     });
 
@@ -111,12 +110,17 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Login error:', error);
     // Log generic error to audit log if specific user context is not available
-    await prisma.auditLog.create({
-      data: {
-        action: 'AUTH_LOGIN_FAILURE',
-        details: { error: (error as Error).message, reason: 'Server error during login attempt' },
-      },
-    }).catch(auditError => console.error('Failed to write audit log for login error:', auditError)); // Avoid crashing if audit log fails
+    // Ensure this audit log write also stringifies details and doesn't crash
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: 'AUTH_LOGIN_FAILURE',
+          details: JSON.stringify({ error: (error as Error).message, reason: 'Server error during login attempt' }),
+        },
+      });
+    } catch (auditError) {
+      console.error('Failed to write audit log for login error:', auditError);
+    }
     
     return NextResponse.json({ message: 'An internal server error occurred' }, { status: 500 });
   }
