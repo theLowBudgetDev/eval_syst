@@ -1,12 +1,16 @@
-import { PrismaClient, UserRole, AttendanceStatus, MessageEventType } from '@prisma/client';
-import { mockAuthUsers } from '../src/contexts/AuthContext'; // Adjusted path
+
+import { PrismaClient } from '@prisma/client';
+// UserRoleType, AttendanceStatusType, MessageEventType will be used from src/types
+// as string literal unions, which are compatible with the String fields in Prisma.
+import type { UserRoleType, AttendanceStatusType, MessageEventType } from '../src/types';
+import { mockAuthUsers } from '../src/contexts/AuthContext'; 
 import {
   mockEvaluationCriteria,
   mockPerformanceScores as originalMockPerformanceScores,
   mockWorkOutputs as originalMockWorkOutputs,
   mockAttendanceRecords as originalMockAttendanceRecords,
   mockAutoMessageTriggers,
-} from '../src/lib/mockData'; // Adjusted path
+} from '../src/lib/mockData'; 
 
 const prisma = new PrismaClient();
 
@@ -19,33 +23,26 @@ async function main() {
   await prisma.attendanceRecord.deleteMany();
   await prisma.autoMessageTrigger.deleteMany();
   await prisma.evaluationCriteria.deleteMany();
-  // For User, we need to be careful due to self-relations.
-  // Easiest to delete supervised users first if any constraint issues.
-  // Or, temporarily disable foreign key checks if DB supports, then re-enable.
-  // For SQLite, it's often fine to delete in order if relations are set up with cascades or NoAction.
-  // Let's try deleting users with supervisorId set first.
   await prisma.user.deleteMany({ where: { supervisorId: { not: null } } });
   await prisma.user.deleteMany({ where: { supervisorId: null } });
 
 
-  // Seed Users
-  // We need to create supervisors first, then employees who report to them.
-  const supervisorUsers = mockAuthUsers.filter(u => u.role === 'supervisor');
-  const adminUsers = mockAuthUsers.filter(u => u.role === 'admin');
-  const employeeUsers = mockAuthUsers.filter(u => u.role === 'employee');
+  const supervisorUsers = mockAuthUsers.filter(u => u.role === 'SUPERVISOR');
+  const adminUsers = mockAuthUsers.filter(u => u.role === 'ADMIN');
+  const employeeUsers = mockAuthUsers.filter(u => u.role === 'EMPLOYEE');
 
-  const createdSupervisors: { [key: string]: string } = {}; // oldId: newId
+  const createdSupervisors: { [key: string]: string } = {}; 
   for (const user of supervisorUsers) {
     const created = await prisma.user.create({
       data: {
-        id: user.id, // Use mock ID for simplicity in seeding
+        id: user.id, 
         name: user.name,
         email: user.email,
         department: user.department,
         position: user.position,
         hireDate: new Date(user.hireDate),
         avatarUrl: user.avatarUrl,
-        role: user.role.toUpperCase() as UserRole,
+        role: user.role, // role is already 'SUPERVISOR' (string)
       },
     });
     createdSupervisors[user.id] = created.id;
@@ -62,7 +59,7 @@ async function main() {
         position: user.position,
         hireDate: new Date(user.hireDate),
         avatarUrl: user.avatarUrl,
-        role: user.role.toUpperCase() as UserRole,
+        role: user.role, // role is already 'ADMIN' (string)
       },
     });
     console.log(`Created admin with id: ${created.id} (original: ${user.id})`);
@@ -82,15 +79,13 @@ async function main() {
         position: user.position,
         hireDate: new Date(user.hireDate),
         avatarUrl: user.avatarUrl,
-        role: user.role.toUpperCase() as UserRole,
+        role: user.role, // role is already 'EMPLOYEE' (string)
         supervisorId: supervisorDbId,
       },
     });
      console.log(`Created employee with id: ${created.id} (original: ${user.id}), supervisorId: ${supervisorDbId || 'N/A'}`);
   }
 
-
-  // Seed Evaluation Criteria
   const createdCriteria: { [key: string]: string } = {};
   for (const criteria of mockEvaluationCriteria) {
     const created = await prisma.evaluationCriteria.create({
@@ -105,38 +100,33 @@ async function main() {
     console.log(`Created evaluation criteria with id: ${created.id}`);
   }
 
-  // Seed Performance Scores
   for (const score of originalMockPerformanceScores) {
-    // Ensure employeeId, criteriaId, and evaluatorId exist in the User and EvaluationCriteria tables
     const employeeExists = await prisma.user.findUnique({ where: { id: score.employeeId } });
     const criteriaExists = await prisma.evaluationCriteria.findUnique({ where: { id: score.criteriaId } });
-    const evaluatorExists = await prisma.user.findUnique({ where: { id: score.evaluatorId } });
+    const evaluatorExists = score.evaluatorId ? await prisma.user.findUnique({ where: { id: score.evaluatorId } }) : true; // Allow null evaluatorId
 
-    if (employeeExists && criteriaExists && evaluatorExists) {
+    if (employeeExists && criteriaExists && (evaluatorExists || !score.evaluatorId)) {
       await prisma.performanceScore.create({
         data: {
-          // id: score.id, // Let Prisma generate this
           employeeId: score.employeeId,
           criteriaId: score.criteriaId,
           score: score.score,
           comments: score.comments,
           evaluationDate: new Date(score.evaluationDate),
-          evaluatorId: score.evaluatorId,
+          evaluatorId: score.evaluatorId || null,
         },
       });
     } else {
-      console.warn(`Skipping performance score due to missing foreign key: emp-${!!employeeExists}, crit-${!!criteriaExists}, eval-${!!evaluatorExists} for mock score ${score.id}`);
+      console.warn(`Skipping performance score due to missing foreign key: emp-${!!employeeExists}, crit-${!!criteriaExists}, eval-${evaluatorExists === true || (score.evaluatorId && !!evaluatorExists)} for mock score ${score.id}`);
     }
   }
   console.log('Seeded performance scores.');
 
-  // Seed Work Outputs
   for (const output of originalMockWorkOutputs) {
     const employeeExists = await prisma.user.findUnique({ where: { id: output.employeeId } });
     if (employeeExists) {
       await prisma.workOutput.create({
         data: {
-          // id: output.id, // Let Prisma generate this
           employeeId: output.employeeId,
           title: output.title,
           description: output.description,
@@ -150,24 +140,18 @@ async function main() {
   }
   console.log('Seeded work outputs.');
 
-  // Seed Attendance Records
   for (const record of originalMockAttendanceRecords) {
      const employeeExists = await prisma.user.findUnique({ where: { id: record.employeeId } });
      if (employeeExists) {
-        let prismaStatus: AttendanceStatus;
-        switch (record.status) {
-            case "Present": prismaStatus = AttendanceStatus.PRESENT; break;
-            case "Absent": prismaStatus = AttendanceStatus.ABSENT; break;
-            case "Late": prismaStatus = AttendanceStatus.LATE; break;
-            case "On Leave": prismaStatus = AttendanceStatus.ON_LEAVE; break;
-            default: 
-                console.warn(`Unknown attendance status: ${record.status}. Defaulting to ABSENT.`);
-                prismaStatus = AttendanceStatus.ABSENT; 
-                break;
+        // The status from mockAttendanceRecords is already a string literal union, compatible with String field
+        const prismaStatus: AttendanceStatusType = record.status as AttendanceStatusType; 
+        if (!["PRESENT", "ABSENT", "LATE", "ON_LEAVE"].includes(prismaStatus)) {
+             console.warn(`Unknown attendance status: ${record.status}. Defaulting to ABSENT.`);
+            // prismaStatus = "ABSENT"; // Or skip
+            continue;
         }
         await prisma.attendanceRecord.create({
             data: {
-            // id: record.id, // Let Prisma generate this
             employeeId: record.employeeId,
             date: new Date(record.date),
             status: prismaStatus,
@@ -180,22 +164,15 @@ async function main() {
   }
   console.log('Seeded attendance records.');
 
-  // Seed Auto Message Triggers
   for (const trigger of mockAutoMessageTriggers) {
-    let prismaEventName: MessageEventType;
-    switch (trigger.eventName) {
-        case "deadline_approaching": prismaEventName = MessageEventType.DEADLINE_APPROACHING; break;
-        case "review_due": prismaEventName = MessageEventType.REVIEW_DUE; break;
-        case "feedback_request": prismaEventName = MessageEventType.FEEDBACK_REQUEST; break;
-        case "evaluation_completed": prismaEventName = MessageEventType.EVALUATION_COMPLETED; break;
-        case "new_assignment": prismaEventName = MessageEventType.NEW_ASSIGNMENT; break;
-        default:
-            console.warn(`Unknown message event type: ${trigger.eventName}. Skipping trigger.`);
-            continue;
+    // The eventName from mockAutoMessageTriggers is already a string literal union
+    const prismaEventName: MessageEventType = trigger.eventName as MessageEventType;
+    if (!["DEADLINE_APPROACHING", "REVIEW_DUE", "FEEDBACK_REQUEST", "EVALUATION_COMPLETED", "NEW_ASSIGNMENT"].includes(prismaEventName)) {
+        console.warn(`Unknown message event type: ${trigger.eventName}. Skipping trigger.`);
+        continue;
     }
     await prisma.autoMessageTrigger.create({
       data: {
-        // id: trigger.id, // Let Prisma generate this
         eventName: prismaEventName,
         messageTemplate: trigger.messageTemplate,
         isActive: trigger.isActive,
@@ -217,3 +194,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

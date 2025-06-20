@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import type { UserRole } from '@prisma/client';
+import type { UserRoleType } from '@/types'; // Using string literal union
 
 interface Params {
   id: string;
@@ -76,7 +76,13 @@ export async function PUT(request: Request, { params }: { params: Params }) {
     if (position) updateData.position = position;
     if (hireDate) updateData.hireDate = new Date(hireDate);
     if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
-    if (role) updateData.role = role as UserRole;
+    if (role) {
+        const validRoles: UserRoleType[] = ['ADMIN', 'SUPERVISOR', 'EMPLOYEE'];
+        if (!validRoles.includes(role as UserRoleType)) {
+            return NextResponse.json({ message: `Invalid role specified: ${role}` }, { status: 400 });
+        }
+        updateData.role = role as UserRoleType;
+    }
     
     if (supervisorId !== undefined) {
         updateData.supervisorId = supervisorId === "--NONE--" || supervisorId === "" || supervisorId === null ? null : supervisorId;

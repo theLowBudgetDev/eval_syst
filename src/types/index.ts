@@ -1,4 +1,5 @@
 
+
 export type UserRoleType = 'ADMIN' | 'SUPERVISOR' | 'EMPLOYEE';
 
 export interface AppUser {
@@ -9,14 +10,14 @@ export interface AppUser {
   position: string;
   hireDate: string; // ISO date string
   avatarUrl?: string | null;
-  role: UserRoleType;
+  role: UserRoleType; // This remains as a string literal union for TS type safety
   supervisorId?: string | null;
-  supervisor?: AppUser | null; // Populated by API include
-  supervisedEmployees?: AppUser[]; // Populated by API include
-  performanceScoresReceived?: PerformanceScore[]; // Populated by API include
-  performanceScoresGiven?: PerformanceScore[]; // Populated by API include for evaluators
-  workOutputs?: WorkOutput[]; // Populated by API include
-  attendanceRecords?: AttendanceRecord[]; // Populated by API include
+  supervisor?: AppUser | null; 
+  supervisedEmployees?: AppUser[]; 
+  performanceScoresReceived?: PerformanceScore[]; 
+  performanceScoresGiven?: PerformanceScore[]; 
+  workOutputs?: WorkOutput[]; 
+  attendanceRecords?: AttendanceRecord[]; 
 }
 
 export interface EvaluationCriteria {
@@ -24,7 +25,7 @@ export interface EvaluationCriteria {
   name: string;
   description: string;
   weight?: number | null; 
-  performanceScores?: PerformanceScore[]; // Relation if needed
+  performanceScores?: PerformanceScore[]; 
 }
 
 export interface PerformanceScore {
@@ -50,6 +51,7 @@ export interface WorkOutput {
   submissionDate: string; // ISO date string
 }
 
+// This remains as a string literal union for TS type safety
 export type AttendanceStatusType = "PRESENT" | "ABSENT" | "LATE" | "ON_LEAVE";
 
 export interface AttendanceRecord {
@@ -57,11 +59,10 @@ export interface AttendanceRecord {
   employeeId: AppUser['id'];
   employee?: AppUser; 
   date: string; // ISO date string
-  status: AttendanceStatusType;
+  status: AttendanceStatusType; // This remains as a string literal union
   notes?: string | null;
 }
 
-// This type might be less needed if assignments are just AppUser.supervisorId updates
 export interface SupervisorAssignment {
   id: string; 
   employeeId: AppUser['id'];
@@ -71,6 +72,7 @@ export interface SupervisorAssignment {
   assignmentDate: string; // ISO date string
 }
 
+// This remains as a string literal union for TS type safety
 export type MessageEventType = 
   | "DEADLINE_APPROACHING"
   | "REVIEW_DUE"
@@ -80,7 +82,7 @@ export type MessageEventType =
 
 export interface AutoMessageTrigger {
   id: string;
-  eventName: MessageEventType;
+  eventName: MessageEventType; // This remains as a string literal union
   messageTemplate: string; 
   isActive: boolean;
   daysBeforeEvent?: number | null; 

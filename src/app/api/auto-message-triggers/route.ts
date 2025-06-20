@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import type { MessageEventType } from '@prisma/client';
+import type { MessageEventType } from '@/types'; // Using string literal union
 
 // GET /api/auto-message-triggers - Fetch all auto message triggers
 export async function GET() {
@@ -28,10 +28,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Event name and message template are required' }, { status: 400 });
     }
 
+    const validEventTypes: MessageEventType[] = ["DEADLINE_APPROACHING", "REVIEW_DUE", "FEEDBACK_REQUEST", "EVALUATION_COMPLETED", "NEW_ASSIGNMENT"];
+    if (!validEventTypes.includes(eventName as MessageEventType)) {
+        return NextResponse.json({ message: `Invalid event name: ${eventName}` }, { status: 400 });
+    }
+
     try {
       const newTrigger = await prisma.autoMessageTrigger.create({
         data: {
-          eventName: eventName as MessageEventType,
+          eventName: eventName as MessageEventType, // eventName is string
           messageTemplate,
           isActive: isActive !== undefined ? isActive : true,
           daysBeforeEvent: daysBeforeEvent ? parseInt(daysBeforeEvent, 10) : null,

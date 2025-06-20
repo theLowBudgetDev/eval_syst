@@ -1,6 +1,7 @@
+
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  url      = "file:./dev.db"
 }
 
 generator client {
@@ -8,57 +9,50 @@ generator client {
 }
 
 model User {
-  id         String   @id @default(cuid())
-  name       String
-  email      String   @unique
-  department String
-  position   String
-  hireDate   DateTime
-  avatarUrl  String?
-  role       UserRole
-
-  supervisorId String?
-  supervisor   User?     @relation("SupervisedBy", fields: [supervisorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  supervised   User[]    @relation("SupervisedBy")
-
-  performanceScores PerformanceScore[] @relation("EmployeeScores")
-  evaluatedScores   PerformanceScore[] @relation("EvaluatorScores")
-  workOutputs       WorkOutput[]
-  attendanceRecords AttendanceRecord[]
+  id                        String    @id @default(cuid())
+  name                      String
+  email                     String    @unique
+  department                String
+  position                  String
+  hireDate                  DateTime
+  avatarUrl                 String?
+  role                      String // Was UserRole
+  supervisorId              String?
+  supervisor                User?     @relation("SupervisorEmployee", fields: [supervisorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  supervisedEmployees       User[]    @relation("SupervisorEmployee")
+  performanceScoresGiven    PerformanceScore[] @relation("EvaluatorScores")
+  performanceScoresReceived PerformanceScore[] @relation("EmployeeScores")
+  workOutputs               WorkOutput[]
+  attendanceRecords         AttendanceRecord[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-enum UserRole {
-  ADMIN
-  SUPERVISOR
-  EMPLOYEE
-}
+// Removed UserRole enum block
 
 model EvaluationCriteria {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String
-  weight      Float?
-
+  id                String   @id @default(cuid())
+  name              String   @unique
+  description       String
+  weight            Float?
   performanceScores PerformanceScore[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model PerformanceScore {
   id             String   @id @default(cuid())
   employeeId     String
+  employee       User     @relation("EmployeeScores", fields: [employeeId], references: [id], onDelete: Cascade)
   criteriaId     String
-  score          Int
+  criteria       EvaluationCriteria @relation(fields: [criteriaId], references: [id], onDelete: Restrict) // Prevent deleting criteria if scores exist
+  score          Int // e.g., 1-5
   comments       String?
   evaluationDate DateTime
-  evaluatorId    String
-
-  employee  User               @relation("EmployeeScores", fields: [employeeId], references: [id], onDelete: Cascade)
-  criteria  EvaluationCriteria @relation(fields: [criteriaId], references: [id], onDelete: Cascade)
-  evaluator User               @relation("EvaluatorScores", fields: [evaluatorId], references: [id], onDelete: Cascade)
+  evaluatorId    String? // Can be null if evaluator is deleted or not applicable
+  evaluator      User?    @relation("EvaluatorScores", fields: [evaluatorId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -71,12 +65,11 @@ model PerformanceScore {
 model WorkOutput {
   id             String   @id @default(cuid())
   employeeId     String
+  employee       User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   title          String
   description    String?
   fileUrl        String?
   submissionDate DateTime
-
-  employee User @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -85,13 +78,12 @@ model WorkOutput {
 }
 
 model AttendanceRecord {
-  id         String           @id @default(cuid())
+  id         String   @id @default(cuid())
   employeeId String
+  employee   User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   date       DateTime
-  status     AttendanceStatus
+  status     String // Was AttendanceStatus (e.g., "PRESENT", "ABSENT", "LATE", "ON_LEAVE")
   notes      String?
-
-  employee User @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -99,28 +91,17 @@ model AttendanceRecord {
   @@index([employeeId])
 }
 
-enum AttendanceStatus {
-  PRESENT
-  ABSENT
-  LATE
-  ON_LEAVE
-}
+// Removed AttendanceStatus enum block
 
 model AutoMessageTrigger {
-  id              String           @id @default(cuid())
-  eventName       MessageEventType
+  id              String    @id @default(cuid())
+  eventName       String // Was MessageEventType (e.g., "DEADLINE_APPROACHING", "REVIEW_DUE")
   messageTemplate String
-  isActive        Boolean          @default(true)
-  daysBeforeEvent Int?
+  isActive        Boolean   @default(true)
+  daysBeforeEvent Int? // Number of days before the event to trigger the message
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-enum MessageEventType {
-  DEADLINE_APPROACHING
-  REVIEW_DUE
-  FEEDBACK_REQUEST
-  EVALUATION_COMPLETED
-  NEW_ASSIGNMENT
-}
+// Removed MessageEventType enum block

@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import type { UserRole } from '@prisma/client';
+import type { UserRoleType } from '@/types'; // Using string literal union from types
 
 // GET /api/users - Fetch all users or users by supervisorId
 export async function GET(request: Request) {
@@ -22,7 +22,6 @@ export async function GET(request: Request) {
     return NextResponse.json(users);
   } catch (error: any) {
     console.error("Critical error in GET /api/users:", error);
-    // Fallback for absolutely critical errors
     const errorMessage = error.message || 'An unexpected error occurred on the server.';
     const errorCode = error.code;
     return new Response(JSON.stringify({ message: 'Failed to process request for users due to a server error.', error: errorMessage, code: errorCode }), {
@@ -42,6 +41,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
     }
 
+    // Validate role against UserRoleType
+    const validRoles: UserRoleType[] = ['ADMIN', 'SUPERVISOR', 'EMPLOYEE'];
+    if (!validRoles.includes(role as UserRoleType)) {
+        return NextResponse.json({ message: `Invalid role specified: ${role}` }, { status: 400 });
+    }
+
     const newUser = await prisma.user.create({
       data: {
         name,
@@ -50,7 +55,7 @@ export async function POST(request: Request) {
         position,
         hireDate: new Date(hireDate),
         avatarUrl,
-        role: role as UserRole,
+        role: role as UserRoleType, // role is a string, but matches UserRoleType
         supervisorId: supervisorId || null,
       },
     });
@@ -64,7 +69,7 @@ export async function POST(request: Request) {
       code: error.code
     };
 
-    if (error instanceof SyntaxError) { // Error parsing request.json()
+    if (error instanceof SyntaxError) { 
         status = 400;
         responseBody.message = 'Invalid JSON payload for user creation.';
         responseBody.error = error.message;

@@ -1,14 +1,15 @@
 
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { UserRole } from '@prisma/client';
+// UserRoleType is not directly used here for Prisma query, as Prisma schema field is String.
+// We query for the string 'SUPERVISOR'.
 
 // GET /api/supervisors - Fetch all users with role SUPERVISOR
 export async function GET() {
   try {
     const supervisors = await prisma.user.findMany({
       where: {
-        role: UserRole.SUPERVISOR,
+        role: 'SUPERVISOR', // Querying for the string value
       },
       orderBy: {
         name: 'asc',

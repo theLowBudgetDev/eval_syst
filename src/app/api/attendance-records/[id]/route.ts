@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import type { AttendanceStatus } from '@prisma/client';
+import type { AttendanceStatusType } from '@/types'; // Using string literal union
 
 interface Params {
   id: string;
@@ -49,7 +49,13 @@ export async function PUT(request: Request, { params }: { params: Params }) {
     const updateData: any = {};
     if (employeeId) updateData.employeeId = employeeId; 
     if (date) updateData.date = new Date(date);
-    if (status) updateData.status = status as AttendanceStatus;
+    if (status) {
+        const validStatuses: AttendanceStatusType[] = ["PRESENT", "ABSENT", "LATE", "ON_LEAVE"];
+        if (!validStatuses.includes(status as AttendanceStatusType)) {
+            return NextResponse.json({ message: `Invalid attendance status: ${status}` }, { status: 400 });
+        }
+        updateData.status = status as AttendanceStatusType; // status is string
+    }
     if (notes !== undefined) updateData.notes = notes;
 
     try {

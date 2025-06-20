@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import type { AttendanceStatus } from '@prisma/client';
+import type { AttendanceStatusType } from '@/types'; // Using string literal union from types
 
 // GET /api/attendance-records - Fetch all attendance records
 export async function GET() {
@@ -31,10 +31,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Employee ID, date, and status are required' }, { status: 400 });
     }
     
+    const validStatuses: AttendanceStatusType[] = ["PRESENT", "ABSENT", "LATE", "ON_LEAVE"];
+    if (!validStatuses.includes(status as AttendanceStatusType)) {
+        return NextResponse.json({ message: `Invalid attendance status: ${status}` }, { status: 400 });
+    }
+
     const recordData = {
       employeeId,
       date: new Date(date),
-      status: status as AttendanceStatus,
+      status: status as AttendanceStatusType, // status is string, matches AttendanceStatusType
       notes,
     };
 

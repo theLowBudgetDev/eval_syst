@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import type { MessageEventType } from '@prisma/client';
+import type { MessageEventType } from '@/types'; // Using string literal union
 
 interface Params {
   id: string;
@@ -44,10 +44,15 @@ export async function PUT(request: Request, { params }: { params: Params }) {
     const { eventName, messageTemplate, isActive, daysBeforeEvent } = data;
 
     const updateData: any = {};
-    if (eventName) updateData.eventName = eventName as MessageEventType;
+    if (eventName) {
+        const validEventTypes: MessageEventType[] = ["DEADLINE_APPROACHING", "REVIEW_DUE", "FEEDBACK_REQUEST", "EVALUATION_COMPLETED", "NEW_ASSIGNMENT"];
+        if (!validEventTypes.includes(eventName as MessageEventType)) {
+            return NextResponse.json({ message: `Invalid event name: ${eventName}` }, { status: 400 });
+        }
+        updateData.eventName = eventName as MessageEventType; // eventName is string
+    }
     if (messageTemplate) updateData.messageTemplate = messageTemplate;
     if (isActive !== undefined) updateData.isActive = isActive;
-    // Ensure daysBeforeEvent is either an int or null, not 0 if meant to be null
     if (daysBeforeEvent !== undefined) updateData.daysBeforeEvent = daysBeforeEvent ? parseInt(daysBeforeEvent, 10) : null;
 
 
