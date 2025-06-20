@@ -158,8 +158,8 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
 
             <div className="flex items-center gap-3">
               <DarkModeToggle />
-              <Avatar className="h-9 w-9">
-                <AvatarImage src={user?.avatarUrl || undefined} alt={user?.name || "User"} data-ai-hint="person face" />
+              <Avatar className="h-8 w-8">
+                <AvatarImage src={user?.avatarUrl || undefined} alt={user?.name || "User"} data-ai-hint="person face"/>
                 <AvatarFallback>{user?.name ? user.name.substring(0, 2).toUpperCase() : "U"}</AvatarFallback>
               </Avatar>
               <Tooltip>
