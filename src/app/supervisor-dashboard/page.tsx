@@ -4,12 +4,16 @@
 import * as React from "react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { Users, ClipboardList, MessageSquareWarning, CheckCircle2, Loader2 } from "lucide-react";
-import type { AppUser, PerformanceScore } from "@/types";
+import type { AppUser, PerformanceScore, WorkOutput } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { format, parseISO } from "date-fns";
 
 export default function SupervisorDashboardPage() {
   const { user, isLoading: authIsLoading } = useAuth();
@@ -18,6 +22,7 @@ export default function SupervisorDashboardPage() {
 
   const [teamMembers, setTeamMembers] = React.useState<AppUser[]>([]);
   const [teamScores, setTeamScores] = React.useState<PerformanceScore[]>([]);
+  const [teamWorkOutputs, setTeamWorkOutputs] = React.useState<WorkOutput[]>([]);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
 
   React.useEffect(() => {
@@ -30,27 +35,36 @@ export default function SupervisorDashboardPage() {
         setIsLoadingData(true);
         Promise.all([
           fetch(`/api/users?supervisorId=${user.id}`),
-          fetch(`/api/performance-scores`)
-        ]).then(async ([teamRes, scoresRes]) => {
+          fetch(`/api/performance-scores`),
+          fetch(`/api/work-outputs`) 
+        ]).then(async ([teamRes, scoresRes, workOutputsRes]) => {
           if (!teamRes.ok) {
             const errorBody = await teamRes.json().catch(() => ({ message: `Failed to fetch team (status ${teamRes.status}, non-JSON response)` }));
             throw new Error(errorBody.error || errorBody.message || `Failed to fetch team (status ${teamRes.status})`);
           }
           const teamData: AppUser[] = await teamRes.json();
           setTeamMembers(teamData);
+          const teamMemberIds = teamData.map(tm => tm.id);
 
           if (!scoresRes.ok) {
             const errorBody = await scoresRes.json().catch(() => ({ message: `Failed to fetch scores (status ${scoresRes.status}, non-JSON response)` }));
             throw new Error(errorBody.error || errorBody.message || `Failed to fetch scores (status ${scoresRes.status})`);
           }
-          const allScores: PerformanceScore[] = await scoresRes.json();
-          const teamMemberIds = teamData.map(tm => tm.id);
-          setTeamScores(allScores.filter(score => teamMemberIds.includes(score.employeeId)));
+          const allScoresData: PerformanceScore[] = await scoresRes.json();
+          setTeamScores(allScoresData.filter(score => teamMemberIds.includes(score.employeeId)));
+
+          if (!workOutputsRes.ok) {
+            const errorBody = await workOutputsRes.json().catch(() => ({ message: `Failed to fetch work outputs (status ${workOutputsRes.status}, non-JSON response)` }));
+            throw new Error(errorBody.error || errorBody.message || `Failed to fetch work outputs (status ${workOutputsRes.status})`);
+          }
+          const allWorkOutputsData: WorkOutput[] = await workOutputsRes.json();
+          setTeamWorkOutputs(allWorkOutputsData.filter(output => teamMemberIds.includes(output.employeeId)));
 
         }).catch(err => {
           toast({ title: "Error Fetching Dashboard Data", description: (err as Error).message, variant: "destructive" });
           setTeamMembers([]);
           setTeamScores([]);
+          setTeamWorkOutputs([]);
         }).finally(() => setIsLoadingData(false));
       }
     } else if (!authIsLoading && !user) {
@@ -68,6 +82,12 @@ export default function SupervisorDashboardPage() {
     ).length;
   }, [teamMembers, teamScores]);
 
+  const getScoreBadgeVariant = (scoreValue: number) => {
+    if (scoreValue >= 4) return "default";
+    if (scoreValue === 3) return "secondary";
+    return "destructive";
+  };
+
   if (authIsLoading || !user || user.role !== 'SUPERVISOR') {
      return (
         <div className="space-y-6">
@@ -75,7 +95,7 @@ export default function SupervisorDashboardPage() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-[120px] w-full rounded-lg" />)}
             </div>
-            <Skeleton className="h-[200px] w-full rounded-lg" />
+            <Skeleton className="h-[300px] w-full rounded-lg" />
         </div>
     );
   }
@@ -131,17 +151,67 @@ export default function SupervisorDashboardPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-1">
-        <Card className="shadow-md border-border">
-            <CardHeader>
-                <CardTitle>Team Overview (Coming Soon)</CardTitle>
-                <CardDescription>Quick view of your team's recent activity and performance highlights.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                {isLoadingData ? <Skeleton className="h-24 w-full"/> : <p className="text-muted-foreground">Detailed team performance charts and summaries will be displayed here.</p>}
-            </CardContent>
+         <Card className="shadow-md border-border">
+          <CardHeader>
+            <CardTitle>Team Performance & Activity</CardTitle>
+            <CardDescription>Recent evaluations and work submissions from your team.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {isLoadingData ? (
+              <>
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-24 w-full" />
+              </>
+            ) : (
+              <>
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Recent Team Evaluations</h3>
+                  {teamScores.length > 0 ? (
+                    <ul className="space-y-3">
+                      {teamScores.slice(0, 3).map(score => (
+                        <li key={score.id} className="flex flex-col sm:flex-row justify-between sm:items-center text-sm p-2 rounded-md border hover:bg-muted/50">
+                          <div className="mb-1 sm:mb-0">
+                            <span className="font-medium">{score.employee?.name || 'Unknown Employee'}</span>
+                            <span className="text-muted-foreground mx-1 sm:mx-2">-</span>
+                            <span className="text-muted-foreground">{score.criteria?.name || 'N/A'}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                             <Badge variant={getScoreBadgeVariant(score.score)}>{score.score}/5</Badge>
+                             <span className="text-xs text-muted-foreground">{format(parseISO(score.evaluationDate), "PP")}</span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (<p className="text-muted-foreground text-sm">No recent evaluations for your team.</p>)}
+                   <Button variant="link" className="px-0 mt-2 text-sm" onClick={() => router.push('/evaluations')}>View All Evaluations</Button>
+                </div>
+                
+                <Separator />
+                
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Recent Work Submissions</h3>
+                  {teamWorkOutputs.length > 0 ? (
+                     <ul className="space-y-3">
+                      {teamWorkOutputs.slice(0, 3).map(output => (
+                        <li key={output.id} className="flex flex-col sm:flex-row justify-between sm:items-center text-sm p-2 rounded-md border hover:bg-muted/50">
+                          <div className="mb-1 sm:mb-0">
+                            <span className="font-medium">{output.employee?.name || 'Unknown Employee'}</span>
+                            <span className="text-muted-foreground mx-1 sm:mx-2">-</span>
+                            <span className="text-muted-foreground truncate max-w-[200px] sm:max-w-[300px]" title={output.title}>{output.title}</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">{format(parseISO(output.submissionDate), "PP")}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (<p className="text-muted-foreground text-sm">No recent work submissions from your team.</p>)}
+                   <Button variant="link" className="px-0 mt-2 text-sm" onClick={() => router.push('/progress')}>View All Work Outputs</Button>
+                </div>
+              </>
+            )}
+          </CardContent>
         </Card>
       </div>
-
     </div>
   );
 }
