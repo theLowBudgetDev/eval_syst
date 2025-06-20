@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Info, Save, Users, BellRing, Palette, Settings2, ShieldAlert, DatabaseZap, MessageCircle } from "lucide-react";
+import { Save, Users, BellRing, Palette, Settings2, ShieldAlert, DatabaseZap, MessageCircle, Info } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -58,6 +58,17 @@ export default function AdminSettingsPage() {
       setIsSaving(false);
     }, 1000);
   };
+  
+  const handleComingSoon = (featureName: string) => {
+    toast({
+      title: "Coming Soon",
+      description: `${featureName} functionality is not yet implemented.`,
+      variant: "default",
+      duration: 3000,
+      action: <Info className="h-5 w-5 text-primary" />,
+    });
+  };
+
 
   return (
     <div className="space-y-8">
@@ -76,11 +87,11 @@ export default function AdminSettingsPage() {
         <AccordionItem value="general">
           <Card className="shadow-md border-border">
             <AccordionTrigger className="p-6 hover:no-underline">
-                <div className="flex items-center gap-3">
-                    <Palette className="h-6 w-6 text-primary" />
-                    <div>
+                <div className="flex items-center gap-3 w-full">
+                    <Palette className="h-6 w-6 text-primary flex-shrink-0" />
+                    <div className="flex-1 text-left">
                         <CardTitle className="text-lg">General Settings</CardTitle>
-                        <CardDescription className="text-sm">Configure basic application appearance and behavior.</CardDescription>
+                        <CardDescription className="text-sm text-muted-foreground">Configure basic application appearance and behavior.</CardDescription>
                     </div>
                 </div>
             </AccordionTrigger>
@@ -119,11 +130,11 @@ export default function AdminSettingsPage() {
         <AccordionItem value="user-management">
           <Card className="shadow-md border-border">
              <AccordionTrigger className="p-6 hover:no-underline">
-                <div className="flex items-center gap-3">
-                    <Users className="h-6 w-6 text-primary" />
-                    <div>
+                <div className="flex items-center gap-3 w-full">
+                    <Users className="h-6 w-6 text-primary flex-shrink-0" />
+                    <div className="flex-1 text-left">
                         <CardTitle className="text-lg">User Management</CardTitle>
-                        <CardDescription className="text-sm">Configure user roles, permissions, and access.</CardDescription>
+                        <CardDescription className="text-sm text-muted-foreground">Configure user roles, permissions, and access.</CardDescription>
                     </div>
                 </div>
             </AccordionTrigger>
@@ -143,11 +154,11 @@ export default function AdminSettingsPage() {
         <AccordionItem value="notifications">
           <Card className="shadow-md border-border">
              <AccordionTrigger className="p-6 hover:no-underline">
-                 <div className="flex items-center gap-3">
-                    <BellRing className="h-6 w-6 text-primary" />
-                    <div>
+                 <div className="flex items-center gap-3 w-full">
+                    <BellRing className="h-6 w-6 text-primary flex-shrink-0" />
+                    <div className="flex-1 text-left">
                         <CardTitle className="text-lg">Notification Preferences</CardTitle>
-                        <CardDescription className="text-sm">Set global notification settings and automated messages.</CardDescription>
+                        <CardDescription className="text-sm text-muted-foreground">Set global notification settings and automated messages.</CardDescription>
                     </div>
                  </div>
             </AccordionTrigger>
@@ -179,11 +190,11 @@ export default function AdminSettingsPage() {
         <AccordionItem value="evaluation-settings">
           <Card className="shadow-md border-border">
              <AccordionTrigger className="p-6 hover:no-underline">
-                <div className="flex items-center gap-3">
-                    <Settings2 className="h-6 w-6 text-primary" />
-                    <div>
+                <div className="flex items-center gap-3 w-full">
+                    <Settings2 className="h-6 w-6 text-primary flex-shrink-0" />
+                    <div className="flex-1 text-left">
                         <CardTitle className="text-lg">Evaluation & Progress Settings</CardTitle>
-                        <CardDescription className="text-sm">Manage criteria, review cycles, and progress tracking.</CardDescription>
+                        <CardDescription className="text-sm text-muted-foreground">Manage criteria, review cycles, and progress tracking.</CardDescription>
                     </div>
                 </div>
             </AccordionTrigger>
@@ -203,11 +214,11 @@ export default function AdminSettingsPage() {
         <AccordionItem value="data-integrations">
           <Card className="shadow-md border-border">
              <AccordionTrigger className="p-6 hover:no-underline">
-                <div className="flex items-center gap-3">
-                    <DatabaseZap className="h-6 w-6 text-primary" />
-                    <div>
+                <div className="flex items-center gap-3 w-full">
+                    <DatabaseZap className="h-6 w-6 text-primary flex-shrink-0" />
+                    <div className="flex-1 text-left">
                         <CardTitle className="text-lg">Data & Integrations</CardTitle>
-                        <CardDescription className="text-sm">Manage data backups, exports, and external integrations.</CardDescription>
+                        <CardDescription className="text-sm text-muted-foreground">Manage data backups, exports, and external integrations.</CardDescription>
                     </div>
                 </div>
             </AccordionTrigger>
@@ -216,8 +227,8 @@ export default function AdminSettingsPage() {
               <CardContent className="pt-6 space-y-4">
                  <p className="text-muted-foreground">Data backup, export, and integration settings will appear here.</p>
                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => toast({title: "Coming Soon", description: "Data backup is not yet implemented."})} disabled={isSaving}>Backup Data</Button>
-                    <Button variant="outline" onClick={() => toast({title: "Coming Soon", description: "Integration management is not yet implemented."})} disabled={isSaving}>Manage Integrations</Button>
+                    <Button variant="outline" onClick={() => handleComingSoon("Data Backup")} disabled={isSaving}>Backup Data</Button>
+                    <Button variant="outline" onClick={() => handleComingSoon("Integration Management")} disabled={isSaving}>Manage Integrations</Button>
                  </div>
               </CardContent>
             </AccordionContent>
@@ -227,11 +238,11 @@ export default function AdminSettingsPage() {
          <AccordionItem value="security-compliance">
           <Card className="shadow-md border-border">
              <AccordionTrigger className="p-6 hover:no-underline">
-                <div className="flex items-center gap-3">
-                    <ShieldAlert className="h-6 w-6 text-primary" />
-                    <div>
+                <div className="flex items-center gap-3 w-full">
+                    <ShieldAlert className="h-6 w-6 text-primary flex-shrink-0" />
+                    <div className="flex-1 text-left">
                         <CardTitle className="text-lg">Security & Compliance</CardTitle>
-                        <CardDescription className="text-sm">Configure security policies and view audit logs.</CardDescription>
+                        <CardDescription className="text-sm text-muted-foreground">Configure security policies and view audit logs.</CardDescription>
                     </div>
                 </div>
             </AccordionTrigger>
@@ -240,7 +251,7 @@ export default function AdminSettingsPage() {
               <CardContent className="pt-6 space-y-4">
                  <p className="text-muted-foreground">Security settings, audit logs, and compliance tools will be available here.</p>
                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => toast({title: "Coming Soon", description: "Audit logs are not yet implemented."})} disabled={isSaving}>View Audit Logs</Button>
+                    <Button variant="outline" onClick={() => handleComingSoon("Audit Logs")} disabled={isSaving}>View Audit Logs</Button>
                  </div>
               </CardContent>
             </AccordionContent>
