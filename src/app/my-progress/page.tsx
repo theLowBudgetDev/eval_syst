@@ -13,14 +13,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Input } from "@/components/ui/input"; // For potential future "add work" form
-import { Textarea } from "@/components/ui/textarea"; // For potential future "add work" form
-import { Label } from "@/components/ui/label"; // For potential future "add work" form
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"; // For "add work" form
+import { Input } from "@/components/ui/input"; 
+import { Textarea } from "@/components/ui/textarea"; 
+import { Label } from "@/components/ui/label"; 
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"; 
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
-import { mockWorkOutputs, mockAttendanceRecords, mockEmployees } from "@/lib/mockData";
-import type { WorkOutput, AttendanceRecord, AttendanceStatus } from "@/types";
+import type { WorkOutput, AttendanceRecord, AppUser } from "@/types";
 import { FileText, CalendarCheck, PlusCircle } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -31,16 +30,17 @@ interface NewWorkOutputData {
   title: string;
   description?: string;
   fileUrl?: string;
-  submissionDate: string;
+  submissionDate: string; // YYYY-MM-DD
 }
 
 export default function MyProgressPage() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: authIsLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   
   const [myWorkOutputs, setMyWorkOutputs] = React.useState<WorkOutput[]>([]);
   const [myAttendance, setMyAttendance] = React.useState<AttendanceRecord[]>([]);
+  const [isLoadingData, setIsLoadingData] = React.useState(true);
   
   const [isAddWorkDialogOpen, setIsAddWorkDialogOpen] = React.useState(false);
   const [newWorkOutput, setNewWorkOutput] = React.useState<NewWorkOutputData>({
@@ -50,37 +50,68 @@ export default function MyProgressPage() {
     fileUrl: "",
   });
 
+  const fetchData = React.useCallback(async () => {
+    if (!user) return;
+    setIsLoadingData(true);
+    try {
+      // Fetch user data which might include work outputs and attendance, or fetch them separately
+      const userDetailsRes = await fetch(`/api/users/${user.id}`);
+      if (!userDetailsRes.ok) throw new Error("Failed to fetch user data");
+      const userData: AppUser = await userDetailsRes.json();
+      
+      setMyWorkOutputs(userData.workOutputs || []);
+      setMyAttendance((userData.attendanceRecords || []).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0,10) );
+
+    } catch (error) {
+      toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
+      setMyWorkOutputs([]);
+      setMyAttendance([]);
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [user, toast]);
 
   React.useEffect(() => {
-    if (!isLoading && !user) {
+    if (!authIsLoading && !user) {
       router.push('/login');
     } else if (user) {
-      setMyWorkOutputs(mockWorkOutputs.filter(wo => wo.employeeId === user.id));
-      setMyAttendance(mockAttendanceRecords.filter(att => att.employeeId === user.id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10)); // Last 10 records
+      fetchData();
     }
-  }, [user, isLoading, router]);
+  }, [user, authIsLoading, router, fetchData]);
 
-  if (isLoading || !user) {
+  if (authIsLoading || isLoadingData || !user) {
     return <div className="flex justify-center items-center h-screen">Loading progress...</div>;
   }
 
-  const handleAddWorkOutput = () => {
+  const handleAddWorkOutput = async () => {
     if (!user || !newWorkOutput.title) {
         toast({ title: "Error", description: "Title is required for work output.", variant: "destructive"});
         return;
     }
-    const newOutput: WorkOutput = {
-        id: `wo-${Date.now()}`,
+    const payload: Omit<WorkOutput, 'id' | 'employee'> = {
         employeeId: user.id,
         ...newWorkOutput,
+        submissionDate: new Date(newWorkOutput.submissionDate).toISOString(), // Ensure ISO string for API
     };
-    // In a real app, this would be an API call.
-    // For now, add to mockData (if it's mutable and shared) or just local state.
-    mockWorkOutputs.push(newOutput); // Add to the global mock array for persistence in this session
-    setMyWorkOutputs(prev => [newOutput, ...prev]);
-    toast({ title: "Work Output Added", description: `"${newOutput.title}" has been recorded.`});
-    setIsAddWorkDialogOpen(false);
-    setNewWorkOutput({ title: "", submissionDate: format(new Date(), "yyyy-MM-dd"), description: "", fileUrl: ""});
+
+    try {
+        const res = await fetch('/api/work-outputs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.message || "Failed to add work output");
+        }
+        const addedOutput = await res.json();
+        setMyWorkOutputs(prev => [addedOutput, ...prev]);
+        toast({ title: "Work Output Added", description: `"${addedOutput.title}" has been recorded.`});
+        setIsAddWorkDialogOpen(false);
+        setNewWorkOutput({ title: "", submissionDate: format(new Date(), "yyyy-MM-dd"), description: "", fileUrl: ""});
+    } catch (error) {
+         toast({ title: "Error Adding Output", description: (error as Error).message, variant: "destructive"});
+    }
   };
 
 
@@ -116,7 +147,7 @@ export default function MyProgressPage() {
                   {myWorkOutputs.slice(0, 5).map((output) => ( // Show recent 5
                     <TableRow key={output.id}>
                       <TableCell className="font-medium">{output.title}</TableCell>
-                      <TableCell>{format(new Date(output.submissionDate), "MMMM d, yyyy")}</TableCell>
+                      <TableCell>{format(new Date(output.submissionDate), "PP")}</TableCell>
                       <TableCell className="text-sm text-muted-foreground truncate max-w-[200px]">
                         {output.description || (output.fileUrl ? <a href={output.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View File</a> : "N/A")}
                       </TableCell>
@@ -148,18 +179,18 @@ export default function MyProgressPage() {
                 <TableBody>
                   {myAttendance.map((record) => (
                     <TableRow key={record.id}>
-                      <TableCell>{format(new Date(record.date), "MMMM d, yyyy")}</TableCell>
+                      <TableCell>{format(new Date(record.date), "PP")}</TableCell>
                       <TableCell>
                         <Badge 
                             variant={
-                                record.status === "Present" ? "default" :
-                                record.status === "On Leave" ? "secondary" :
-                                record.status === "Late" ? "outline" : 
-                                "destructive" // Absent
+                                record.status === "PRESENT" ? "default" :
+                                record.status === "ON_LEAVE" ? "secondary" :
+                                record.status === "LATE" ? "outline" : 
+                                "destructive" // ABSENT
                             }
-                            className={record.status === "Late" ? "border-yellow-500 text-yellow-700 dark:border-yellow-400 dark:text-yellow-300" : ""}
+                            className={record.status === "LATE" ? "border-yellow-500 text-yellow-700 dark:border-yellow-400 dark:text-yellow-300" : ""}
                         >
-                            {record.status}
+                            {record.status.replace("_", " ")}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{record.notes || "N/A"}</TableCell>
@@ -197,7 +228,7 @@ export default function MyProgressPage() {
                 <Input 
                     id="wo-date" 
                     type="date"
-                    value={newWorkOutput.submissionDate}
+                    value={newWorkOutput.submissionDate} // Already YYYY-MM-DD
                     onChange={(e) => setNewWorkOutput({...newWorkOutput, submissionDate: e.target.value})}
                 />
               </div>
@@ -226,7 +257,8 @@ export default function MyProgressPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
     </div>
   );
 }
+
+    

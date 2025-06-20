@@ -26,21 +26,33 @@ export default function AdminSettingsPage() {
   const [systemTheme, setSystemTheme] = React.useState("system");
 
   React.useEffect(() => {
-    if (!isLoading && user && user.role !== 'admin') {
+    if (!isLoading && user && user.role !== 'ADMIN') {
       router.push('/login'); 
     }
   }, [user, isLoading, router]);
 
-  if (isLoading || !user || user.role !== 'admin') {
+  if (isLoading || !user || user.role !== 'ADMIN') {
     return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
   }
 
   const handleSaveChanges = () => {
-    // In a real app, this would save to a backend
+    // In a real app, this would save to a backend via API
     toast({
-        title: "Settings Saved",
+        title: "Settings Saved (Simulated)",
         description: "Your changes to the admin settings have been simulated as saved.",
     });
+    // Example API call (if it existed):
+    // try {
+    //   const response = await fetch('/api/settings', {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify({ appName, notificationsEnabled, emailNotifications, systemTheme }),
+    //   });
+    //   if (!response.ok) throw new Error('Failed to save settings');
+    //   toast({ title: "Settings Saved", description: "Successfully updated settings." });
+    // } catch (error) {
+    //   toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+    // }
   };
 
   return (
@@ -181,3 +193,5 @@ export default function AdminSettingsPage() {
     </div>
   );
 }
+
+    

@@ -7,41 +7,65 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { Users, ClipboardList, MessageSquareWarning, CheckCircle2 } from "lucide-react";
-import { mockEmployees, mockPerformanceScores } from "@/lib/mockData"; // Assuming you have mock data
+import type { AppUser, PerformanceScore } from "@/types";
+import { useToast } from "@/hooks/use-toast";
 
 export default function SupervisorDashboardPage() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: authIsLoading } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
+
+  const [teamMembers, setTeamMembers] = React.useState<AppUser[]>([]);
+  const [teamScores, setTeamScores] = React.useState<PerformanceScore[]>([]);
+  const [isLoadingData, setIsLoadingData] = React.useState(true);
 
   React.useEffect(() => {
-    if (!isLoading && user && user.role !== 'supervisor') {
-      // If user is not supervisor, redirect them
-      if (user.role === 'admin') router.push('/');
-      else if (user.role === 'employee') router.push('/employee-dashboard');
-      else router.push('/login');
-    }
-  }, [user, isLoading, router]);
+    if (!authIsLoading && user) {
+      if (user.role !== 'SUPERVISOR') {
+        if (user.role === 'ADMIN') router.push('/');
+        else if (user.role === 'EMPLOYEE') router.push('/employee-dashboard');
+        else router.push('/login');
+      } else {
+        // Fetch data for Supervisor Dashboard
+        setIsLoadingData(true);
+        Promise.all([
+          fetch(`/api/users?supervisorId=${user.id}`), // API to fetch users supervised by current user
+          fetch(`/api/performance-scores`) // Fetch all scores, then filter
+        ]).then(async ([teamRes, scoresRes]) => {
+          if (!teamRes.ok) throw new Error('Failed to fetch team members');
+          const teamData: AppUser[] = await teamRes.json();
+          setTeamMembers(teamData);
+          
+          if (!scoresRes.ok) throw new Error('Failed to fetch performance scores');
+          const allScores: PerformanceScore[] = await scoresRes.json();
+          const teamMemberIds = teamData.map(tm => tm.id);
+          setTeamScores(allScores.filter(score => teamMemberIds.includes(score.employeeId)));
 
-  // Calculate supervisor-specific metrics
-  const teamMembersCount = React.useMemo(() => {
-    if (!user) return 0;
-    return mockEmployees.filter(emp => emp.supervisorId === user.id).length;
-  }, [user]);
+        }).catch(err => {
+          toast({ title: "Error fetching dashboard data", description: err.message, variant: "destructive" });
+          setTeamMembers([]);
+          setTeamScores([]);
+        }).finally(() => setIsLoadingData(false));
+      }
+    } else if (!authIsLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, authIsLoading, router, toast]);
+
+  const teamMembersCount = teamMembers.length;
 
   const pendingReviewsCount = React.useMemo(() => {
-    if(!user) return 0;
-    const supervisedEmployeeIds = mockEmployees
-        .filter(emp => emp.supervisorId === user.id)
-        .map(emp => emp.id);
-    
     // This is a simplified logic. In a real app, you'd check for actual pending reviews.
-    // For now, let's assume half of the team has a "pending" review if there are few scores.
-    const teamScoresCount = mockPerformanceScores.filter(score => supervisedEmployeeIds.includes(score.employeeId)).length;
-    return Math.max(0, Math.floor(teamMembersCount / 2) - teamScoresCount);
+    // For now, let's assume a review is "pending" if an employee has no score in the last 3 months.
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
-  }, [user, teamMembersCount]);
+    return teamMembers.filter(member => 
+        !teamScores.some(score => score.employeeId === member.id && new Date(score.evaluationDate) > threeMonthsAgo)
+    ).length;
+  }, [teamMembers, teamScores]);
 
-  if (isLoading || !user || user.role !== 'supervisor') {
+  if (authIsLoading || isLoadingData || !user || user.role !== 'SUPERVISOR') {
     return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
   }
 
@@ -68,7 +92,7 @@ export default function SupervisorDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold font-headline">{pendingReviewsCount}</div>
-            <p className="text-xs text-muted-foreground">Evaluations requiring your attention.</p>
+            <p className="text-xs text-muted-foreground">Evaluations due or upcoming.</p>
           </CardContent>
         </Card>
         
@@ -85,12 +109,12 @@ export default function SupervisorDashboardPage() {
 
         <Card className="shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed Tasks</CardTitle>
+            <CardTitle className="text-sm font-medium">Completed Tasks (Team)</CardTitle>
             <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold font-headline">N/A</div> {/* Placeholder */}
-            <p className="text-xs text-muted-foreground">Tasks completed this cycle.</p>
+            <div className="text-xl font-bold font-headline">N/A</div> {/* Placeholder */}
+            <p className="text-xs text-muted-foreground">Team tasks completed this cycle.</p>
           </CardContent>
         </Card>
       </div>
@@ -110,3 +134,5 @@ export default function SupervisorDashboardPage() {
     </div>
   );
 }
+
+    

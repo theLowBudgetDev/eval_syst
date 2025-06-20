@@ -1,16 +1,19 @@
 
 "use client"; 
 
+import * as React from "react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { mockDashboardMetrics, mockPerformanceTrendData, mockEvaluationDistributionData } from "@/lib/mockData";
-import type { DashboardMetric } from "@/types";
+import { mockPerformanceTrendData, mockEvaluationDistributionData } from "@/lib/mockData"; // Charts still use mock
+import type { DashboardMetric, PerformanceScore, AppUser } from "@/types";
 import { TrendingUp, TrendingDown, Minus, AlertTriangle, Users, ClipboardList } from "lucide-react";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
-import { Line, LineChart, Pie, PieChart, Cell } from "recharts"; // Removed Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer as they are implicitly handled by ChartContainer or not directly used for these specific charts.
+import { Line, LineChart, Pie, PieChart, Cell } from "recharts"; 
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
-import React from "react"; // Ensure React is imported
+import { useToast } from "@/hooks/use-toast";
+import { CartesianGrid, XAxis, YAxis } from 'recharts';
+
 
 const chartConfigPerformance = {
   'Avg Score': {
@@ -43,19 +46,62 @@ const chartConfigDistribution = {
 
 
 export default function DashboardPage() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: authIsLoading } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
+
+  const [metrics, setMetrics] = React.useState<DashboardMetric[]>([]);
+  const [isLoadingData, setIsLoadingData] = React.useState(true);
 
   React.useEffect(() => {
-    if (!isLoading && user && user.role !== 'admin') {
-      // If user is not admin, redirect them from this page
-      if (user.role === 'supervisor') router.push('/supervisor-dashboard');
-      else if (user.role === 'employee') router.push('/employee-dashboard');
-      else router.push('/login'); // Fallback if role is somehow not set
-    }
-  }, [user, isLoading, router]);
+    if (!authIsLoading && user) {
+      if (user.role !== 'ADMIN') {
+        if (user.role === 'SUPERVISOR') router.push('/supervisor-dashboard');
+        else if (user.role === 'EMPLOYEE') router.push('/employee-dashboard');
+        else router.push('/login');
+      } else {
+        // Fetch data for Admin Dashboard
+        setIsLoadingData(true);
+        Promise.all([
+          fetch('/api/users'),
+          fetch('/api/performance-scores') 
+        ]).then(async ([usersRes, scoresRes]) => {
+          if (!usersRes.ok) throw new Error('Failed to fetch users');
+          const usersData: AppUser[] = await usersRes.json();
+          
+          if (!scoresRes.ok) throw new Error('Failed to fetch scores');
+          const scoresData: PerformanceScore[] = await scoresRes.json();
 
-  if (isLoading || !user || user.role !== 'admin') {
+          const totalEmployees = usersData.length;
+          // Placeholder for pending evaluations - needs more complex logic or dedicated API
+          const pendingEvaluations = usersData.filter(u => u.role === 'EMPLOYEE' && !scoresData.some(s => s.employeeId === u.id && new Date(s.evaluationDate) > new Date(new Date().setMonth(new Date().getMonth()-3)))).length; // very rough estimate
+          
+          const averageScore = scoresData.length > 0 
+            ? (scoresData.reduce((acc, curr) => acc + curr.score, 0) / scoresData.length).toFixed(1) + "/5"
+            : "N/A";
+
+          setMetrics([
+            { title: 'Total Employees', value: totalEmployees, icon: Users, trend: 0, description: 'Active users' },
+            { title: 'Pending Evaluations', value: pendingEvaluations, icon: ClipboardList, trend: 0, description: 'Approx. due' },
+            { title: 'Overall Performance', value: averageScore, icon: TrendingUp, description: 'Average score' },
+            { title: 'Attendance Issues', value: 0, icon: AlertTriangle, trend: 0, description: 'This week (mock)' }, // Placeholder
+          ]);
+        }).catch(err => {
+          toast({ title: "Error fetching dashboard data", description: err.message, variant: "destructive" });
+          setMetrics([ // Fallback metrics on error
+             { title: 'Total Employees', value: 'N/A', icon: Users},
+             { title: 'Pending Evaluations', value: 'N/A', icon: ClipboardList},
+             { title: 'Overall Performance', value: 'N/A', icon: TrendingUp},
+             { title: 'Attendance Issues', value: 'N/A', icon: AlertTriangle},
+          ]);
+        }).finally(() => setIsLoadingData(false));
+      }
+    } else if (!authIsLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, authIsLoading, router, toast]);
+
+  if (authIsLoading || isLoadingData || !user || user.role !== 'ADMIN') {
     return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
   }
 
@@ -65,15 +111,15 @@ export default function DashboardPage() {
       <PageHeader title="Admin Dashboard" description="System summary and key performance indicators." />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {mockDashboardMetrics.map((metric) => (
+        {metrics.length > 0 ? metrics.map((metric) => (
           <MetricCard key={metric.title} metric={metric} />
-        ))}
+        )) : Array(4).fill(0).map((_,i) => <Card key={i} className="shadow-lg h-[120px] animate-pulse bg-muted/50" />) }
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>Performance Trends</CardTitle>
+            <CardTitle>Performance Trends (Mock Data)</CardTitle>
             <CardDescription>Average performance scores over the last 6 months.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -91,13 +137,13 @@ export default function DashboardPage() {
 
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>Evaluation Distribution</CardTitle>
+            <CardTitle>Evaluation Distribution (Mock Data)</CardTitle>
             <CardDescription>Distribution of employees by performance category.</CardDescription>
           </CardHeader>
           <CardContent className="flex items-center justify-center">
             <ChartContainer config={chartConfigDistribution} className="h-[300px] w-full max-w-xs">
               <PieChart>
-                <ChartTooltip content={<ChartTooltipContent nameKey="name" />} /> {/* Changed from nameKey="value" */}
+                <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
                 <Pie 
                   data={mockEvaluationDistributionData} 
                   dataKey="value" 
@@ -106,7 +152,7 @@ export default function DashboardPage() {
                   cy="50%" 
                   outerRadius={100}
                   labelLine={false}
-                  label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => { // Removed index as it's not used
+                  label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
                     const RADIAN = Math.PI / 180;
                     const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
                     const x = cx + radius * Math.cos(-midAngle * RADIAN);
@@ -137,9 +183,8 @@ export default function DashboardPage() {
   );
 }
 
-// Ensure MetricCard's Icon prop is correctly typed if it comes from lucide-react or similar
 function MetricCard({ metric }: { metric: DashboardMetric }) {
-  const Icon = metric.icon || Users; // Provide a default icon
+  const Icon = metric.icon || Users; 
   const TrendIcon = metric.trend && metric.trend > 0 ? TrendingUp : metric.trend && metric.trend < 0 ? TrendingDown : Minus;
   const trendColor = metric.trend && metric.trend > 0 ? "text-green-600 dark:text-green-400" : metric.trend && metric.trend < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground";
 
@@ -154,7 +199,7 @@ function MetricCard({ metric }: { metric: DashboardMetric }) {
         {metric.trend !== undefined && (
           <p className={`text-xs ${trendColor} flex items-center mt-1`}>
             <TrendIcon className="h-4 w-4 mr-1" />
-            {metric.trend > 0 ? `+${metric.trend}` : metric.trend}%
+            {metric.trend !== 0 ? `${metric.trend > 0 ? '+' : ''}${metric.trend}%` : ''}
             {metric.description && <span className="text-muted-foreground ml-1"> {metric.description}</span>}
           </p>
         )}
@@ -166,5 +211,4 @@ function MetricCard({ metric }: { metric: DashboardMetric }) {
   );
 }
 
-// Need to explicitly import these from recharts for LineChart if not implicitly handled by ChartContainer
-import { CartesianGrid, XAxis, YAxis } from 'recharts';
+    

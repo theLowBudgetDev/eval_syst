@@ -17,35 +17,51 @@ import { Button } from "@/components/ui/button";
 import { Eye } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
-import { mockPerformanceScores, mockEvaluationCriteria, mockSupervisors } from "@/lib/mockData";
-import type { PerformanceScore } from "@/types";
+import type { PerformanceScore, AppUser, EvaluationCriteria } from "@/types";
 import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
 
 export default function MyEvaluationsPage() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: authIsLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
   const [myScores, setMyScores] = React.useState<PerformanceScore[]>([]);
+  const [isLoadingData, setIsLoadingData] = React.useState(true);
 
   React.useEffect(() => {
-    if (!isLoading && !user) {
+    if (!authIsLoading && !user) {
       router.push('/login');
     } else if (user) {
-      setMyScores(mockPerformanceScores.filter(score => score.employeeId === user.id));
+      setIsLoadingData(true);
+      // Fetch user data which includes scores, or fetch scores directly for the user
+      fetch(`/api/users/${user.id}`) // Assuming /api/users/[id] returns scoresReceived
+        .then(res => {
+          if (!res.ok) throw new Error("Failed to fetch evaluations");
+          return res.json();
+        })
+        .then((userData: AppUser) => {
+          setMyScores(userData.performanceScoresReceived || []);
+        })
+        .catch(err => {
+          toast({ title: "Error", description: err.message, variant: "destructive" });
+          setMyScores([]); // Ensure scores are reset on error
+        })
+        .finally(() => setIsLoadingData(false));
     }
-  }, [user, isLoading, router]);
+  }, [user, authIsLoading, router, toast]);
 
-  if (isLoading || !user) {
+  if (authIsLoading || isLoadingData || !user) {
     return <div className="flex justify-center items-center h-screen">Loading evaluations...</div>;
   }
   
-  const getCriteriaName = (criteriaId: string) => {
-    return mockEvaluationCriteria.find(c => c.id === criteriaId)?.name || "Unknown Criteria";
+  // These functions assume that the performanceScore object from API includes nested criteria and evaluator objects
+  const getCriteriaName = (score: PerformanceScore) => {
+    return score.criteria?.name || "Unknown Criteria";
   };
 
-  const getEvaluatorName = (evaluatorId: string) => {
-    return mockSupervisors.find(s => s.id === evaluatorId)?.name || "Unknown Evaluator";
+  const getEvaluatorName = (score: PerformanceScore) => {
+    return score.evaluator?.name || "Unknown Evaluator";
   };
 
 
@@ -78,14 +94,14 @@ export default function MyEvaluationsPage() {
               <TableBody>
                 {myScores.map((score) => (
                   <TableRow key={score.id}>
-                    <TableCell>{new Date(score.evaluationDate).toLocaleDateString()}</TableCell>
-                    <TableCell><Badge variant="outline">{getCriteriaName(score.criteriaId)}</Badge></TableCell>
+                    <TableCell>{format(new Date(score.evaluationDate), "PP")}</TableCell>
+                    <TableCell><Badge variant="outline">{getCriteriaName(score)}</Badge></TableCell>
                     <TableCell className="text-center">
                       <Badge variant={score.score >= 4 ? "default" : score.score === 3 ? "secondary" : "destructive"}>
                         {score.score}/5
                       </Badge>
                     </TableCell>
-                    <TableCell>{getEvaluatorName(score.evaluatorId)}</TableCell>
+                    <TableCell>{getEvaluatorName(score)}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="outline" size="icon" onClick={() => toast({title: "Details", description: score.comments || "No comments provided."})}>
                         <Eye className="h-4 w-4" />
@@ -106,3 +122,5 @@ export default function MyEvaluationsPage() {
     </div>
   );
 }
+
+    

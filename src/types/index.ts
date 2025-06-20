@@ -8,66 +8,66 @@ export interface AppUser {
   department: string;
   position: string;
   hireDate: string; // ISO date string
-  avatarUrl?: string | null; // Allow null
+  avatarUrl?: string | null;
   role: UserRoleType;
   supervisorId?: string | null;
-  supervisor?: AppUser | null;
-  supervisedEmployees?: AppUser[];
-  // Relations for other data if fetched, e.g. performanceScores, workOutputs
-  performanceScoresReceived?: PerformanceScore[];
-  workOutputs?: WorkOutput[];
-  attendanceRecords?: AttendanceRecord[];
+  supervisor?: AppUser | null; // Populated by API include
+  supervisedEmployees?: AppUser[]; // Populated by API include
+  performanceScoresReceived?: PerformanceScore[]; // Populated by API include
+  performanceScoresGiven?: PerformanceScore[]; // Populated by API include for evaluators
+  workOutputs?: WorkOutput[]; // Populated by API include
+  attendanceRecords?: AttendanceRecord[]; // Populated by API include
 }
 
 export interface EvaluationCriteria {
   id: string;
   name: string;
   description: string;
-  weight?: number | null; // Optional weight for scoring
+  weight?: number | null; 
+  performanceScores?: PerformanceScore[]; // Relation if needed
 }
 
 export interface PerformanceScore {
   id: string;
   employeeId: AppUser['id'];
-  employee?: AppUser; // For include
+  employee?: AppUser; 
   criteriaId: EvaluationCriteria['id'];
-  criteria?: EvaluationCriteria; // For include
-  score: number; // e.g., 1-5
+  criteria?: EvaluationCriteria; 
+  score: number; 
   comments?: string | null;
   evaluationDate: string; // ISO date string
-  evaluatorId: AppUser['id'] | null; // Supervisor ID or null if evaluator deleted
-  evaluator?: AppUser | null; // For include
+  evaluatorId: AppUser['id'] | null; 
+  evaluator?: AppUser | null;
 }
 
 export interface WorkOutput {
   id: string;
   employeeId: AppUser['id'];
-  employee?: AppUser; // For include
+  employee?: AppUser; 
   title: string;
   description?: string | null;
-  fileUrl?: string | null; // URL to the attached file
+  fileUrl?: string | null; 
   submissionDate: string; // ISO date string
 }
 
-export type AttendanceStatusType = "PRESENT" | "ABSENT" | "LATE" | "ON_LEAVE"; // Matches Prisma Enum
+export type AttendanceStatusType = "PRESENT" | "ABSENT" | "LATE" | "ON_LEAVE";
 
 export interface AttendanceRecord {
   id: string;
   employeeId: AppUser['id'];
-  employee?: AppUser; // For include
+  employee?: AppUser; 
   date: string; // ISO date string
   status: AttendanceStatusType;
   notes?: string | null;
 }
 
-// SupervisorAssignment might be redundant if assignment is just updating AppUser.supervisorId
-// For now, keeping it as it might be used in specific assignment UI contexts
+// This type might be less needed if assignments are just AppUser.supervisorId updates
 export interface SupervisorAssignment {
-  id: string; // This might be the employeeId in practice if it's about an assignment action
+  id: string; 
   employeeId: AppUser['id'];
-  employeeName?: string; // For display
-  supervisorId: AppUser['id'] | null; // Can be null to unassign
-  supervisorName?: string; // For display
+  employeeName?: string; 
+  supervisorId: AppUser['id'] | null; 
+  supervisorName?: string; 
   assignmentDate: string; // ISO date string
 }
 
@@ -76,28 +76,28 @@ export type MessageEventType =
   | "REVIEW_DUE"
   | "FEEDBACK_REQUEST"
   | "EVALUATION_COMPLETED"
-  | "NEW_ASSIGNMENT"; // Matches Prisma Enum
+  | "NEW_ASSIGNMENT";
 
 export interface AutoMessageTrigger {
   id: string;
   eventName: MessageEventType;
-  messageTemplate: string; // Can include placeholders like {{employeeName}}, {{deadlineDate}}
+  messageTemplate: string; 
   isActive: boolean;
-  daysBeforeEvent?: number | null; // For triggers like 'deadline_approaching'
+  daysBeforeEvent?: number | null; 
 }
 
-// For charts
 export interface ChartDataPoint {
-  name: string; // e.g., month, quarter, category
+  name: string; 
   value: number;
-  [key: string]: any; // For multi-series charts
+  [key: string]: any; 
 }
 
-// Example metric for dashboard
 export interface DashboardMetric {
   title: string;
   value: string | number;
   icon?: React.ElementType;
-  trend?: number; // e.g., 5 for +5%, -2 for -2%
+  trend?: number; 
   description?: string;
 }
+
+    

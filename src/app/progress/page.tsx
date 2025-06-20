@@ -15,99 +15,233 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { mockAttendanceRecords, mockWorkOutputs, mockEmployees } from "@/lib/mockData";
-import type { AttendanceRecord, WorkOutput, AttendanceStatus } from "@/types";
-import { CalendarCheck, ListTodo, Search, Download, PlusCircle } from "lucide-react"; // Removed User, Filter as they are not directly used or have placeholders
+import type { AttendanceRecord, WorkOutput, AppUser, AttendanceStatusType } from "@/types"; // Use AttendanceStatusType
+import { CalendarCheck, ListTodo, Search, Download, PlusCircle, Edit } from "lucide-react";
 import { format } from "date-fns";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+const ATTENDANCE_STATUSES: AttendanceStatusType[] = ["PRESENT", "ABSENT", "LATE", "ON_LEAVE"];
+
+interface AttendanceFormData {
+    employeeId: string;
+    date: string; // YYYY-MM-DD
+    status: AttendanceStatusType;
+    notes?: string;
+}
+interface WorkOutputFormData {
+    employeeId: string;
+    title: string;
+    submissionDate: string; // YYYY-MM-DD
+    description?: string;
+    fileUrl?: string;
+}
 
 
 export default function ProgressMonitorPage() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: authIsLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
-  const [attendanceRecordsAll, setAttendanceRecordsAll] = React.useState<AttendanceRecord[]>(mockAttendanceRecords);
-  const [workOutputsAll, setWorkOutputsAll] = React.useState<WorkOutput[]>(mockWorkOutputs);
+  const [allEmployees, setAllEmployees] = React.useState<AppUser[]>([]);
+  const [attendanceRecordsAll, setAttendanceRecordsAll] = React.useState<AttendanceRecord[]>([]);
+  const [workOutputsAll, setWorkOutputsAll] = React.useState<WorkOutput[]>([]);
+  const [isLoadingData, setIsLoadingData] = React.useState(true);
 
   const [attendanceSearchTerm, setAttendanceSearchTerm] = React.useState("");
-  const [attendanceStatusFilter, setAttendanceStatusFilter] = React.useState<AttendanceStatus | "all">("all");
+  const [attendanceStatusFilter, setAttendanceStatusFilter] = React.useState<AttendanceStatusType | "all">("all");
   const [attendanceDateFilter, setAttendanceDateFilter] = React.useState<string>(format(new Date(), "yyyy-MM-dd"));
 
   const [workOutputSearchTerm, setWorkOutputSearchTerm] = React.useState("");
   const [workOutputEmployeeFilter, setWorkOutputEmployeeFilter] = React.useState<string>("all");
+  
+  const [isAttendanceFormOpen, setIsAttendanceFormOpen] = React.useState(false);
+  const [editingAttendanceRecord, setEditingAttendanceRecord] = React.useState<AttendanceRecord | null>(null);
+  const [attendanceFormData, setAttendanceFormData] = React.useState<AttendanceFormData>({
+    employeeId: "", date: format(new Date(), "yyyy-MM-dd"), status: "PRESENT", notes: ""
+  });
 
+  const [isWorkOutputFormOpen, setIsWorkOutputFormOpen] = React.useState(false);
+  const [editingWorkOutput, setEditingWorkOutput] = React.useState<WorkOutput | null>(null);
+  const [workOutputFormData, setWorkOutputFormData] = React.useState<WorkOutputFormData>({
+    employeeId: "", title: "", submissionDate: format(new Date(), "yyyy-MM-dd"), description: "", fileUrl: ""
+  });
+
+
+  const fetchData = React.useCallback(async () => {
+    setIsLoadingData(true);
+    try {
+      const [attendanceRes, workOutputsRes, employeesRes] = await Promise.all([
+        fetch("/api/attendance-records"),
+        fetch("/api/work-outputs"),
+        fetch("/api/users"),
+      ]);
+
+      if (!attendanceRes.ok) throw new Error("Failed to fetch attendance records");
+      setAttendanceRecordsAll(await attendanceRes.json());
+
+      if (!workOutputsRes.ok) throw new Error("Failed to fetch work outputs");
+      setWorkOutputsAll(await workOutputsRes.json());
+
+      if (!employeesRes.ok) throw new Error("Failed to fetch employees");
+      setAllEmployees(await employeesRes.json());
+
+    } catch (error) {
+      toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [toast]);
 
   React.useEffect(() => {
-    if (!isLoading && user && user.role !== 'admin' && user.role !== 'supervisor') {
-      router.push('/login'); // Or an unauthorized page for employees if this page is admin/supervisor only
+    if (!authIsLoading && user) {
+      if (user.role !== 'ADMIN' && user.role !== 'SUPERVISOR') {
+        router.push('/login');
+      } else {
+        fetchData();
+      }
+    } else if (!authIsLoading && !user) {
+      router.push('/login');
     }
-  }, [user, isLoading, router]);
+  }, [user, authIsLoading, router, fetchData]);
 
-
-  const getEmployeeName = (employeeId: string) => {
-    return mockEmployees.find(emp => emp.id === employeeId)?.name || "Unknown Employee";
-  };
+  const getEmployeeName = (employeeId: string) => allEmployees.find(emp => emp.id === employeeId)?.name || "Unknown Employee";
   
   const supervisedEmployeeIds = React.useMemo(() => {
-      if (user?.role === 'supervisor') {
-          return mockEmployees.filter(emp => emp.supervisorId === user.id).map(emp => emp.id);
+      if (user?.role === 'SUPERVISOR') {
+          return allEmployees.filter(emp => emp.supervisorId === user.id).map(emp => emp.id);
       }
       return [];
-  }, [user]);
+  }, [user, allEmployees]);
+
+  const employeesForForms = React.useMemo(() => {
+    if (user?.role === 'SUPERVISOR') return allEmployees.filter(emp => emp.supervisorId === user.id);
+    if (user?.role === 'ADMIN') return allEmployees.filter(emp => emp.role === 'EMPLOYEE' || emp.role === 'SUPERVISOR'); // Admin can add for anyone
+    return [];
+  }, [user, allEmployees]);
+
 
   const filteredAttendanceRecords = React.useMemo(() => {
     let recordsToFilter = attendanceRecordsAll;
-    if (user?.role === 'supervisor') {
+    if (user?.role === 'SUPERVISOR') {
         recordsToFilter = attendanceRecordsAll.filter(record => supervisedEmployeeIds.includes(record.employeeId));
     }
-
     return recordsToFilter.filter(record => {
-        const employeeName = getEmployeeName(record.employeeId).toLowerCase();
+        const employeeName = record.employee?.name?.toLowerCase() || getEmployeeName(record.employeeId).toLowerCase();
         const search = attendanceSearchTerm.toLowerCase();
         const matchesSearch = employeeName.includes(search) || record.notes?.toLowerCase().includes(search);
         const matchesStatus = attendanceStatusFilter === "all" || record.status === attendanceStatusFilter;
-        const matchesDate = !attendanceDateFilter || record.date === attendanceDateFilter;
+        const matchesDate = !attendanceDateFilter || format(new Date(record.date), "yyyy-MM-dd") === attendanceDateFilter;
         return matchesSearch && matchesStatus && matchesDate;
     });
-  }, [attendanceRecordsAll, user, supervisedEmployeeIds, attendanceSearchTerm, attendanceStatusFilter, attendanceDateFilter]);
+  }, [attendanceRecordsAll, user, supervisedEmployeeIds, attendanceSearchTerm, attendanceStatusFilter, attendanceDateFilter, getEmployeeName]);
 
   const filteredWorkOutputs = React.useMemo(() => {
     let outputsToFilter = workOutputsAll;
-     if (user?.role === 'supervisor') {
+     if (user?.role === 'SUPERVISOR') {
         outputsToFilter = workOutputsAll.filter(output => supervisedEmployeeIds.includes(output.employeeId));
     }
-    
     return outputsToFilter.filter(output => {
-        const employeeName = getEmployeeName(output.employeeId).toLowerCase();
+        const employeeName = output.employee?.name?.toLowerCase() || getEmployeeName(output.employeeId).toLowerCase();
         const search = workOutputSearchTerm.toLowerCase();
         const matchesSearch = employeeName.includes(search) || output.title.toLowerCase().includes(search) || output.description?.toLowerCase().includes(search);
-        // If supervisor, employee filter should be from their team or all (of their team)
         const matchesEmployee = workOutputEmployeeFilter === "all" || output.employeeId === workOutputEmployeeFilter;
         return matchesSearch && matchesEmployee;
     });
-  }, [workOutputsAll, user, supervisedEmployeeIds, workOutputSearchTerm, workOutputEmployeeFilter]);
+  }, [workOutputsAll, user, supervisedEmployeeIds, workOutputSearchTerm, workOutputEmployeeFilter, getEmployeeName]);
   
-  const attendanceStatuses: AttendanceStatus[] = ["Present", "Absent", "Late", "On Leave"];
-
-  const employeesForFilter = React.useMemo(() => {
-    if (user?.role === 'supervisor') {
-        return mockEmployees.filter(emp => emp.supervisorId === user.id);
-    }
-    return mockEmployees; // Admin sees all
-  }, [user]);
-
-
-  if (isLoading || !user || (user.role !== 'admin' && user.role !== 'supervisor')) {
+  
+  if (authIsLoading || isLoadingData || !user || (user.role !== 'ADMIN' && user.role !== 'SUPERVISOR')) {
     return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
   }
   
-  const canPerformWriteActions = user.role === 'admin'; // Or supervisor for certain actions like adding notes
+  const canPerformWriteActions = user.role === 'ADMIN';
 
+  // Attendance Form Handlers
+  const handleOpenAttendanceForm = (record: AttendanceRecord | null = null) => {
+    if (record) {
+        setEditingAttendanceRecord(record);
+        setAttendanceFormData({
+            employeeId: record.employeeId,
+            date: format(new Date(record.date), "yyyy-MM-dd"),
+            status: record.status,
+            notes: record.notes || ""
+        });
+    } else {
+        setEditingAttendanceRecord(null);
+        setAttendanceFormData({ employeeId: "", date: format(new Date(), "yyyy-MM-dd"), status: "PRESENT", notes: ""});
+    }
+    setIsAttendanceFormOpen(true);
+  };
+
+  const handleAttendanceFormSubmit = async () => {
+    const method = editingAttendanceRecord ? 'PUT' : 'POST';
+    const url = editingAttendanceRecord ? `/api/attendance-records/${editingAttendanceRecord.id}` : '/api/attendance-records';
+    const payload = { ...attendanceFormData, date: new Date(attendanceFormData.date).toISOString()};
+
+    try {
+        const res = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+        if (!res.ok) { const err = await res.json(); throw new Error(err.message || "Failed to save attendance");}
+        toast({title: `Attendance record ${editingAttendanceRecord ? 'updated' : 'added'}`});
+        fetchData();
+        setIsAttendanceFormOpen(false);
+    } catch (error) {
+        toast({title: "Error", description: (error as Error).message, variant: "destructive"});
+    }
+  };
+
+  // Work Output Form Handlers
+  const handleOpenWorkOutputForm = (output: WorkOutput | null = null) => {
+     if (output) {
+        setEditingWorkOutput(output);
+        setWorkOutputFormData({
+            employeeId: output.employeeId,
+            title: output.title,
+            submissionDate: format(new Date(output.submissionDate), "yyyy-MM-dd"),
+            description: output.description || "",
+            fileUrl: output.fileUrl || ""
+        });
+    } else {
+        setEditingWorkOutput(null);
+        setWorkOutputFormData({ employeeId: "", title: "", submissionDate: format(new Date(), "yyyy-MM-dd"), description: "", fileUrl: ""});
+    }
+    setIsWorkOutputFormOpen(true);
+  };
+
+  const handleWorkOutputFormSubmit = async () => {
+    const method = editingWorkOutput ? 'PUT' : 'POST';
+    const url = editingWorkOutput ? `/api/work-outputs/${editingWorkOutput.id}` : '/api/work-outputs';
+    const payload = {...workOutputFormData, submissionDate: new Date(workOutputFormData.submissionDate).toISOString()};
+
+    try {
+        const res = await fetch(url, {method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+        if (!res.ok) { const err = await res.json(); throw new Error(err.message || "Failed to save work output");}
+        toast({title: `Work output ${editingWorkOutput ? 'updated' : 'added'}`});
+        fetchData();
+        setIsWorkOutputFormOpen(false);
+    } catch (error) {
+        toast({title: "Error", description: (error as Error).message, variant: "destructive"});
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -130,8 +264,17 @@ export default function ProgressMonitorPage() {
         <TabsContent value="attendance" className="mt-6">
           <Card className="shadow-lg">
             <CardHeader>
-              <CardTitle>Attendance Records</CardTitle>
-              <CardDescription>View and manage employee attendance.</CardDescription>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                        <CardTitle>Attendance Records</CardTitle>
+                        <CardDescription>View and manage employee attendance.</CardDescription>
+                    </div>
+                    {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') && (
+                        <Button onClick={() => handleOpenAttendanceForm()}>
+                            <PlusCircle className="mr-2 h-4 w-4" /> Add Attendance
+                        </Button>
+                    )}
+                </div>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col sm:flex-row gap-4 mb-4">
@@ -150,14 +293,14 @@ export default function ProgressMonitorPage() {
                     onChange={(e) => setAttendanceDateFilter(e.target.value)}
                     className="w-full sm:w-auto"
                 />
-                <Select value={attendanceStatusFilter} onValueChange={(value) => setAttendanceStatusFilter(value as AttendanceStatus | "all")}>
+                <Select value={attendanceStatusFilter} onValueChange={(value) => setAttendanceStatusFilter(value as AttendanceStatusType | "all")}>
                   <SelectTrigger className="w-full sm:w-[180px]">
                     <SelectValue placeholder="Filter by status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
-                    {attendanceStatuses.map(status => (
-                        <SelectItem key={status} value={status}>{status}</SelectItem>
+                    {ATTENDANCE_STATUSES.map(status => (
+                        <SelectItem key={status} value={status}>{status.replace("_", " ")}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -169,37 +312,39 @@ export default function ProgressMonitorPage() {
                     <TableHead>Date</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Notes</TableHead>
-                    {(user.role === 'admin' || user.role === 'supervisor') && <TableHead className="text-right">Actions</TableHead>}
+                    {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredAttendanceRecords.length > 0 ? filteredAttendanceRecords.map((record) => (
                     <TableRow key={record.id}>
-                      <TableCell className="font-medium">{getEmployeeName(record.employeeId)}</TableCell>
-                      <TableCell>{format(new Date(record.date), "MMMM d, yyyy")}</TableCell>
+                      <TableCell className="font-medium">{record.employee?.name || getEmployeeName(record.employeeId)}</TableCell>
+                      <TableCell>{format(new Date(record.date), "PP")}</TableCell>
                       <TableCell>
                         <Badge 
                             variant={
-                                record.status === "Present" ? "default" :
-                                record.status === "On Leave" ? "secondary" :
-                                record.status === "Late" ? "outline" : 
-                                "destructive" // Absent
+                                record.status === "PRESENT" ? "default" :
+                                record.status === "ON_LEAVE" ? "secondary" :
+                                record.status === "LATE" ? "outline" : 
+                                "destructive" // ABSENT
                             }
-                            className={record.status === "Late" ? "border-yellow-500 text-yellow-700 dark:border-yellow-400 dark:text-yellow-300" : ""}
+                            className={record.status === "LATE" ? "border-yellow-500 text-yellow-700 dark:border-yellow-400 dark:text-yellow-300" : ""}
                         >
-                            {record.status}
+                            {record.status.replace("_", " ")}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{record.notes || "N/A"}</TableCell>
-                      {(user.role === 'admin' || user.role === 'supervisor') && (
+                      {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') && (
                         <TableCell className="text-right">
-                          <Button variant="outline" size="sm" onClick={() => toast({title: "Coming Soon", description: `Editing ${record.id} will be available soon.`})}>Edit</Button>
+                          <Button variant="outline" size="sm" onClick={() => handleOpenAttendanceForm(record)}>
+                            <Edit className="mr-1 h-3 w-3"/> Edit
+                          </Button>
                         </TableCell>
                       )}
                     </TableRow>
                   )) : (
                      <TableRow>
-                        <TableCell colSpan={(user.role === 'admin' || user.role === 'supervisor') ? 5 : 4} className="h-24 text-center">
+                        <TableCell colSpan={(user.role === 'ADMIN' || user.role === 'SUPERVISOR') ? 5 : 4} className="h-24 text-center">
                             No attendance records found for the selected filters.
                         </TableCell>
                     </TableRow>
@@ -213,8 +358,17 @@ export default function ProgressMonitorPage() {
         <TabsContent value="work-outputs" className="mt-6">
           <Card className="shadow-lg">
             <CardHeader>
-              <CardTitle>Work Outputs</CardTitle>
-              <CardDescription>Track submitted work and project deliverables.</CardDescription>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                        <CardTitle>Work Outputs</CardTitle>
+                        <CardDescription>Track submitted work and project deliverables.</CardDescription>
+                    </div>
+                    {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') && (
+                        <Button onClick={() => handleOpenWorkOutputForm()}>
+                            <PlusCircle className="mr-2 h-4 w-4" /> Add Work Output
+                        </Button>
+                    )}
+                </div>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col sm:flex-row gap-4 mb-4">
@@ -232,18 +386,12 @@ export default function ProgressMonitorPage() {
                     <SelectValue placeholder="Filter by employee" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Employees {user?.role === 'supervisor' && "(My Team)"}</SelectItem>
-                    {employeesForFilter.map(emp => (
+                    <SelectItem value="all">All Employees {user?.role === 'SUPERVISOR' && "(My Team)"}</SelectItem>
+                    {allEmployees.filter(emp => user?.role === 'ADMIN' || (user?.role === 'SUPERVISOR' && supervisedEmployeeIds.includes(emp.id))).map(emp => (
                         <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                 {/* Admin or Supervisor can add work outputs (perhaps for others, or supervisor for their team) */}
-                 {(user.role === 'admin' || user.role === 'supervisor') && (
-                    <Button variant="outline" onClick={() => toast({title: "Coming Soon", description: "Adding new work output will be available soon."})}>
-                        <PlusCircle className="mr-2 h-4 w-4" /> Add Work Output
-                    </Button>
-                 )}
               </div>
               <Table>
                 <TableHeader>
@@ -258,14 +406,16 @@ export default function ProgressMonitorPage() {
                 <TableBody>
                   {filteredWorkOutputs.length > 0 ? filteredWorkOutputs.map((output) => (
                     <TableRow key={output.id}>
-                      <TableCell className="font-medium">{getEmployeeName(output.employeeId)}</TableCell>
+                      <TableCell className="font-medium">{output.employee?.name || getEmployeeName(output.employeeId)}</TableCell>
                       <TableCell>{output.title}</TableCell>
-                      <TableCell>{format(new Date(output.submissionDate), "MMMM d, yyyy")}</TableCell>
+                      <TableCell>{format(new Date(output.submissionDate), "PP")}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {output.description || (output.fileUrl ? <a href={output.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View File</a> : "N/A")}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="outline" size="sm" onClick={() => toast({title: "Coming Soon", description: `Viewing ${output.id} will be available soon.`})}>View Details</Button>
+                        <Button variant="outline" size="sm" onClick={() => handleOpenWorkOutputForm(output)}>
+                            <Edit className="mr-1 h-3 w-3"/> Edit
+                        </Button>
                       </TableCell>
                     </TableRow>
                   )) : (
@@ -281,6 +431,91 @@ export default function ProgressMonitorPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+    {isAttendanceFormOpen && (
+        <Dialog open={isAttendanceFormOpen} onOpenChange={setIsAttendanceFormOpen}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{editingAttendanceRecord ? "Edit" : "Add"} Attendance Record</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="space-y-1">
+                        <Label htmlFor="att-employee">Employee</Label>
+                        <Select value={attendanceFormData.employeeId} onValueChange={val => setAttendanceFormData({...attendanceFormData, employeeId: val})} disabled={!!editingAttendanceRecord}>
+                            <SelectTrigger id="att-employee"><SelectValue placeholder="Select Employee"/></SelectTrigger>
+                            <SelectContent>
+                                {employeesForForms.map(emp => <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-1">
+                        <Label htmlFor="att-date">Date</Label>
+                        <Input id="att-date" type="date" value={attendanceFormData.date} onChange={e => setAttendanceFormData({...attendanceFormData, date: e.target.value})} />
+                    </div>
+                    <div className="space-y-1">
+                        <Label htmlFor="att-status">Status</Label>
+                        <Select value={attendanceFormData.status} onValueChange={val => setAttendanceFormData({...attendanceFormData, status: val as AttendanceStatusType})}>
+                            <SelectTrigger id="att-status"><SelectValue placeholder="Select Status"/></SelectTrigger>
+                            <SelectContent>
+                                {ATTENDANCE_STATUSES.map(s => <SelectItem key={s} value={s}>{s.replace("_", " ")}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-1">
+                        <Label htmlFor="att-notes">Notes</Label>
+                        <Textarea id="att-notes" value={attendanceFormData.notes} onChange={e => setAttendanceFormData({...attendanceFormData, notes: e.target.value})} />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsAttendanceFormOpen(false)}>Cancel</Button>
+                    <Button onClick={handleAttendanceFormSubmit}>Save Record</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )}
+    {isWorkOutputFormOpen && (
+         <Dialog open={isWorkOutputFormOpen} onOpenChange={setIsWorkOutputFormOpen}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{editingWorkOutput ? "Edit" : "Add"} Work Output</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="space-y-1">
+                        <Label htmlFor="wo-employee">Employee</Label>
+                        <Select value={workOutputFormData.employeeId} onValueChange={val => setWorkOutputFormData({...workOutputFormData, employeeId: val})} disabled={!!editingWorkOutput}>
+                            <SelectTrigger id="wo-employee"><SelectValue placeholder="Select Employee"/></SelectTrigger>
+                            <SelectContent>
+                                {employeesForForms.map(emp => <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-1">
+                        <Label htmlFor="wo-title">Title</Label>
+                        <Input id="wo-title" value={workOutputFormData.title} onChange={e => setWorkOutputFormData({...workOutputFormData, title: e.target.value})} />
+                    </div>
+                    <div className="space-y-1">
+                        <Label htmlFor="wo-subdate">Submission Date</Label>
+                        <Input id="wo-subdate" type="date" value={workOutputFormData.submissionDate} onChange={e => setWorkOutputFormData({...workOutputFormData, submissionDate: e.target.value})} />
+                    </div>
+                    <div className="space-y-1">
+                        <Label htmlFor="wo-desc">Description</Label>
+                        <Textarea id="wo-desc" value={workOutputFormData.description} onChange={e => setWorkOutputFormData({...workOutputFormData, description: e.target.value})} />
+                    </div>
+                    <div className="space-y-1">
+                        <Label htmlFor="wo-url">File URL</Label>
+                        <Input id="wo-url" value={workOutputFormData.fileUrl} onChange={e => setWorkOutputFormData({...workOutputFormData, fileUrl: e.target.value})} />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsWorkOutputFormOpen(false)}>Cancel</Button>
+                    <Button onClick={handleWorkOutputFormSubmit}>Save Output</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )}
+
     </div>
   );
 }
+
+    

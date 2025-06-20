@@ -32,8 +32,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { mockEmployees, mockSupervisors } from "@/lib/mockData";
-import type { Employee } from "@/types"; 
+import type { AppUser } from "@/types"; 
 import { UserPlus, UserCheck, Edit, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -42,80 +41,100 @@ import { useRouter } from "next/navigation";
 const NO_SUPERVISOR_VALUE = "--NONE--";
 
 export default function SupervisorAssignmentsPage() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: authIsLoading } = useAuth();
   const router = useRouter();
 
-  const [assignments, setAssignments] = React.useState<Employee[]>(
-    mockEmployees.map(emp => ({
-      ...emp,
-      supervisorName: mockSupervisors.find(s => s.id === emp.supervisorId)?.name || "N/A"
-    }))
-  );
+  const [employees, setEmployees] = React.useState<AppUser[]>([]);
+  const [supervisors, setSupervisors] = React.useState<AppUser[]>([]);
+  const [isLoadingData, setIsLoadingData] = React.useState(true);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = React.useState(false);
-  const [selectedEmployee, setSelectedEmployee] = React.useState<Employee | null>(null);
-  const [selectedSupervisorId, setSelectedSupervisorId] = React.useState<string | undefined>(undefined);
+  const [selectedEmployee, setSelectedEmployee] = React.useState<AppUser | null>(null);
+  const [selectedSupervisorId, setSelectedSupervisorId] = React.useState<string | null | undefined>(undefined); // Can be null
   const [searchTerm, setSearchTerm] = React.useState("");
   const { toast } = useToast();
 
-  React.useEffect(() => {
-    if (!isLoading && user && user.role !== 'admin') {
-      router.push('/login'); // Or an unauthorized page
-    }
-  }, [user, isLoading, router]);
+  const fetchData = React.useCallback(async () => {
+    setIsLoadingData(true);
+    try {
+      const [employeesRes, supervisorsRes] = await Promise.all([
+        fetch("/api/users"),
+        fetch("/api/supervisors"),
+      ]);
 
-  if (isLoading || !user || user.role !== 'admin') {
-    return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
+      if (!employeesRes.ok) throw new Error("Failed to fetch employees");
+      const employeesData = await employeesRes.json();
+      setEmployees(employeesData);
+
+      if (!supervisorsRes.ok) throw new Error("Failed to fetch supervisors");
+      const supervisorsData = await supervisorsRes.json();
+      setSupervisors(supervisorsData);
+
+    } catch (error) {
+      toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [toast]);
+
+  React.useEffect(() => {
+    if (!authIsLoading && user) {
+      if (user.role !== 'ADMIN') {
+        router.push('/login'); 
+      } else {
+        fetchData();
+      }
+    } else if (!authIsLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, authIsLoading, router, fetchData]);
+
+  if (authIsLoading || isLoadingData) {
+    return <div className="flex justify-center items-center h-screen">Loading assignments...</div>;
+  }
+  if (!user || user.role !== 'ADMIN') {
+    return <div className="flex justify-center items-center h-screen">Unauthorized access.</div>;
   }
 
-  const handleOpenAssignDialog = (employee: Employee) => {
+  const handleOpenAssignDialog = (employee: AppUser) => {
     setSelectedEmployee(employee);
     setSelectedSupervisorId(employee.supervisorId); 
     setIsAssignDialogOpen(true);
   };
 
-  const handleAssignSupervisor = () => {
-    if (selectedEmployee && selectedSupervisorId && selectedSupervisorId !== NO_SUPERVISOR_VALUE) {
-      const supervisorName = mockSupervisors.find(s => s.id === selectedSupervisorId)?.name || "N/A";
-      const updatedAssignments = assignments.map((emp) =>
-        emp.id === selectedEmployee.id
-          ? { ...emp, supervisorId: selectedSupervisorId, supervisorName: supervisorName }
-          : emp
-      );
-      setAssignments(updatedAssignments);
-      // Update mockEmployees as well if it's the source of truth for other pages
-      const employeeIndex = mockEmployees.findIndex(emp => emp.id === selectedEmployee.id);
-      if (employeeIndex !== -1) {
-        mockEmployees[employeeIndex] = { ...mockEmployees[employeeIndex], supervisorId: selectedSupervisorId, supervisorName: supervisorName };
-      }
-      toast({
-        title: "Supervisor Assigned",
-        description: `${supervisorName} assigned to ${selectedEmployee.name}.`,
+  const handleAssignSupervisor = async () => {
+    if (!selectedEmployee) return;
+
+    const supervisorIdToAssign = selectedSupervisorId === NO_SUPERVISOR_VALUE || selectedSupervisorId === "" ? null : selectedSupervisorId;
+
+    try {
+      const res = await fetch('/api/assignments/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId: selectedEmployee.id, supervisorId: supervisorIdToAssign }),
       });
-    } else if (selectedEmployee && (!selectedSupervisorId || selectedSupervisorId === NO_SUPERVISOR_VALUE)) { 
-       const updatedAssignments = assignments.map((emp) =>
-        emp.id === selectedEmployee.id
-          ? { ...emp, supervisorId: undefined, supervisorName: "N/A" }
-          : emp
-      );
-      setAssignments(updatedAssignments);
-      const employeeIndex = mockEmployees.findIndex(emp => emp.id === selectedEmployee.id);
-      if (employeeIndex !== -1) {
-        mockEmployees[employeeIndex] = { ...mockEmployees[employeeIndex], supervisorId: undefined, supervisorName: "N/A" };
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Failed to update assignment");
       }
+      const updatedEmployee = await res.json();
+      setEmployees(prev => prev.map(emp => emp.id === updatedEmployee.id ? updatedEmployee : emp));
       toast({
-        title: "Supervisor Unassigned",
-        description: `Supervisor unassigned from ${selectedEmployee.name}.`,
+        title: "Assignment Updated",
+        description: `${selectedEmployee.name}'s supervisor has been updated.`,
       });
+    } catch (error) {
+      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setIsAssignDialogOpen(false);
+      setSelectedEmployee(null);
+      setSelectedSupervisorId(undefined);
     }
-    setIsAssignDialogOpen(false);
-    setSelectedEmployee(null);
-    setSelectedSupervisorId(undefined);
   };
   
-  const filteredAssignments = assignments.filter(emp => 
+  const filteredEmployees = employees.filter(emp => 
     emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (emp.supervisorName && emp.supervisorName.toLowerCase().includes(searchTerm.toLowerCase()))
+    (emp.supervisor?.name && emp.supervisor.name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -124,7 +143,7 @@ export default function SupervisorAssignmentsPage() {
         title="Supervisor Assignments"
         description="Assign and manage supervisors for employees."
         actions={
-          <Button onClick={() => alert("Batch assign functionality coming soon!")}>
+          <Button onClick={() => toast({ title: "Coming Soon", description: "Batch assign functionality is not yet implemented." })}>
             <UserPlus className="mr-2 h-4 w-4" /> Batch Assign Supervisors
           </Button>
         }
@@ -153,17 +172,17 @@ export default function SupervisorAssignmentsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredAssignments.length > 0 ? (
-              filteredAssignments.map((employee) => (
+            {filteredEmployees.length > 0 ? (
+              filteredEmployees.map((employee) => (
               <TableRow key={employee.id}>
                 <TableCell className="font-medium">{employee.name}</TableCell>
                 <TableCell>{employee.email}</TableCell>
                 <TableCell><Badge variant="secondary">{employee.department}</Badge></TableCell>
                 <TableCell>
-                  {employee.supervisorName && employee.supervisorName !== "N/A" ? (
+                  {employee.supervisor?.name ? (
                     <div className="flex items-center gap-2">
                       <UserCheck className="h-4 w-4 text-green-500" />
-                      {employee.supervisorName}
+                      {employee.supervisor.name}
                     </div>
                   ) : (
                     <span className="text-muted-foreground">Not Assigned</span>
@@ -180,7 +199,7 @@ export default function SupervisorAssignmentsPage() {
           ) : (
             <TableRow>
                 <TableCell colSpan={5} className="h-24 text-center">
-                  No employees found for assignment.
+                  No employees found.
                 </TableCell>
               </TableRow>
           )}
@@ -194,15 +213,15 @@ export default function SupervisorAssignmentsPage() {
             <DialogHeader>
               <DialogTitle>Assign Supervisor to {selectedEmployee.name}</DialogTitle>
               <DialogDescription>
-                Select a supervisor for {selectedEmployee.name}. Current: {selectedEmployee.supervisorName || "N/A"}
+                Select a supervisor for {selectedEmployee.name}. Current: {selectedEmployee.supervisor?.name || "N/A"}
               </DialogDescription>
             </DialogHeader>
             <div className="py-4 space-y-2">
               <Label htmlFor="supervisor">Supervisor</Label>
               <Select
-                value={selectedSupervisorId === undefined ? NO_SUPERVISOR_VALUE : selectedSupervisorId}
+                value={selectedSupervisorId === null || selectedSupervisorId === undefined ? NO_SUPERVISOR_VALUE : selectedSupervisorId}
                 onValueChange={(value) => {
-                  setSelectedSupervisorId(value === NO_SUPERVISOR_VALUE ? undefined : value);
+                  setSelectedSupervisorId(value === NO_SUPERVISOR_VALUE ? null : value);
                 }}
               >
                 <SelectTrigger id="supervisor">
@@ -212,9 +231,9 @@ export default function SupervisorAssignmentsPage() {
                   <SelectItem value={NO_SUPERVISOR_VALUE}>
                     <em>Unassign (No Supervisor)</em>
                   </SelectItem>
-                  {mockSupervisors.map((supervisor) => (
-                    <SelectItem key={supervisor.id} value={supervisor.id}>
-                      {supervisor.name}
+                  {supervisors.map((supervisorUser) => (
+                    <SelectItem key={supervisorUser.id} value={supervisorUser.id}>
+                      {supervisorUser.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -232,3 +251,5 @@ export default function SupervisorAssignmentsPage() {
     </div>
   );
 }
+
+    
