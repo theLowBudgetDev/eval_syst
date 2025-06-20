@@ -125,7 +125,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
             <div className="flex items-center gap-2">
               <Sheet>
                 <SheetTrigger asChild>
-                  <Button variant="outline" size="icon" className="md:hidden" aria-label="Open sidebar">
+                  <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open sidebar">
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
@@ -164,7 +164,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
               </Avatar>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" size="icon" onClick={logout} aria-label="Logout">
+                  <Button variant="ghost" size="icon" onClick={logout} aria-label="Logout">
                     <LogOut className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
