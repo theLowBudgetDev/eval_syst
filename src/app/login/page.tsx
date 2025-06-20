@@ -57,14 +57,22 @@ export default function LoginPage() {
         body: JSON.stringify(data),
       });
 
-      const result = await response.json();
-
       if (!response.ok) {
-        throw new Error(result.message || 'Login failed. Please check your credentials.');
+        let errorMessage = 'Login failed. Please check your credentials.';
+        try {
+          // Attempt to parse error JSON only if response was not ok
+          const errorResult = await response.json();
+          errorMessage = errorResult.message || errorMessage;
+        } catch (e) {
+          // If parsing error JSON fails, stick to a generic message or use response.statusText
+          errorMessage = `Login failed (status ${response.status}): ${response.statusText || 'Server error'}`;
+        }
+        throw new Error(errorMessage);
       }
 
-      login(result as AppUser); // The API now returns AppUser directly
-      // Redirection is handled by AuthContext
+      // If response.ok is true, then we can safely parse the JSON.
+      const result = await response.json();
+      login(result as AppUser); 
 
     } catch (error) {
       const errorMessage = (error as Error).message || "An unexpected error occurred.";
