@@ -8,8 +8,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   SidebarProvider,
   Sidebar,
-  SidebarHeader,
-  SidebarContent,
+  SidebarHeader, // This is the custom div-based header from ui/sidebar
+  SidebarContent, // This is the custom div-based content from ui/sidebar
   SidebarFooter,
   SidebarMenu,
   SidebarMenuItem,
@@ -18,7 +18,13 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import {
+  Sheet,
+  SheetContent, // This is the actual DialogPrimitive.Content from ui/sheet
+  SheetTrigger,
+  SheetHeader as ShadSheetHeader, // Aliased import from ui/sheet
+  SheetTitle as ShadSheetTitle     // Aliased import from ui/sheet
+} from '@/components/ui/sheet';
 import { Menu, Settings, LogOut } from 'lucide-react';
 import { getNavLinks, type NavLink as NavLinkType } from '@/lib/navigation';
 import type { UserRoleType } from '@/types';
@@ -130,18 +136,24 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="p-0 w-[var(--sidebar-width-mobile,280px)] flex flex-col bg-sidebar">
+                  {/* Accessible Title for the Sheet (Dialog) */}
+                  <ShadSheetHeader className="sr-only"> {/* Visually hidden header from ui/sheet */}
+                    <ShadSheetTitle>Main Navigation Menu</ShadSheetTitle> {/* Accessible title from ui/sheet */}
+                  </ShadSheetHeader>
+
+                   {/* Visual Header with Logo (uses custom SidebarHeader component from ui/sidebar) */}
                    <SidebarHeader className="p-4 flex items-center justify-start border-b border-sidebar-border">
                       <Link href="/" className="flex items-center gap-2">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-primary"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
                         <h1 className="text-xl font-bold font-headline tracking-tight">EvalTrack</h1>
                       </Link>
                    </SidebarHeader>
-                   <SidebarContent className="flex-1 p-2">
+                   <SidebarContent className="flex-1 p-2"> {/* Custom SidebarContent from ui/sidebar */}
                       <SidebarMenu>
                         <RenderNavLinks role={user?.role || null} />
                       </SidebarMenu>
                    </SidebarContent>
-                    <SidebarFooter className="p-2 mt-auto border-t border-sidebar-border">
+                    <SidebarFooter className="p-2 mt-auto border-t border-sidebar-border"> {/* Custom SidebarFooter from ui/sidebar */}
                       <SidebarMenuButton tooltip="Settings" asChild>
                           <Link href={user?.role === 'ADMIN' ? "/admin/settings" : "/my-profile"}>
                               <Settings className="h-4 w-4" />
