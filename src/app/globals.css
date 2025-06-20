@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Inter', sans-serif;
 }
 
 @layer base {
@@ -15,17 +15,17 @@ body {
     --popover: 208 100% 100%;
     --popover-foreground: 210 50% 20%;
     --primary: 197 71% 73%; /* Soft sky blue */
-    --primary-foreground: 200 50% 20%; /* Dark text on primary */
+    --primary-foreground: 200 50% 15%; /* Darker text on primary for contrast */
     --secondary: 200 60% 90%; /* Lighter blue for secondary elements */
     --secondary-foreground: 200 50% 20%;
-    --muted: 210 40% 90%; /* Muted gray */
-    --muted-foreground: 210 30% 50%; /* Lighter text for muted */
-    --accent: 190 50% 80%; /* Muted purple/PowderBlue from user spec */
+    --muted: 210 40% 92%; /* Slightly adjusted muted gray */
+    --muted-foreground: 210 30% 55%; /* Slightly adjusted lighter text for muted */
+    --accent: 190 50% 80%; /* PowderBlue for accent */
     --accent-foreground: 190 50% 20%; /* Dark text on accent */
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 75% 55%; /* Adjusted destructive color */
     --destructive-foreground: 0 0% 98%;
-    --border: 197 50% 85%; /* Lighter sky blue for borders */
-    --input: 197 50% 90%; /* Even lighter sky blue for input background */
+    --border: 197 50% 88%; /* Slightly adjusted lighter sky blue for borders */
+    --input: 197 50% 95%; /* Even lighter sky blue for input background */
     --ring: 197 71% 65%; /* Slightly darker sky blue for rings */
     --chart-1: 197 71% 73%; /* primary */
     --chart-2: 190 50% 80%; /* accent */
@@ -37,12 +37,12 @@ body {
     /* Sidebar variables for light theme */
     --sidebar-background: 208 90% 96%;
     --sidebar-foreground: 210 50% 25%;
-    --sidebar-primary: 197 71% 68%; 
-    --sidebar-primary-foreground: 200 50% 15%;
-    --sidebar-accent: 197 60% 90%;
-    --sidebar-accent-foreground: 197 60% 30%;
     --sidebar-border: 197 50% 85%;
     --sidebar-ring: 197 71% 65%;
+    --sidebar-accent: 197 60% 90%; /* Sidebar accent */
+    --sidebar-accent-foreground: 197 60% 30%; /* Text on sidebar accent */
+    --sidebar-primary: 197 71% 68%; /* Sidebar primary button */
+    --sidebar-primary-foreground: 200 50% 15%; /* Text on sidebar primary button */
   }
 
   .dark {
@@ -53,14 +53,14 @@ body {
     --popover: 210 20% 15%;
     --popover-foreground: 210 30% 90%;
     --primary: 197 60% 65%; /* Sky blue, slightly less bright */
-    --primary-foreground: 210 30% 95%; /* Very light text on primary */
+    --primary-foreground: 210 20% 98%; /* Very light text on primary for dark mode */
     --secondary: 210 20% 25%;
     --secondary-foreground: 210 30% 90%;
     --muted: 210 20% 22%;
     --muted-foreground: 210 30% 60%;
-    --accent: 190 40% 70%; /* Muted purple/PowderBlue from user spec, slightly less bright */
-    --accent-foreground: 210 30% 95%;
-    --destructive: 0 62.8% 30.6%;
+    --accent: 190 40% 70%; /* PowderBlue for accent, slightly less bright */
+    --accent-foreground: 190 30% 95%; /* Lighter text on accent for dark mode */
+    --destructive: 0 60% 45%; /* Adjusted destructive for dark */
     --destructive-foreground: 0 0% 98%;
     --border: 210 20% 30%;
     --input: 210 20% 25%;
@@ -74,12 +74,12 @@ body {
     /* Sidebar variables for dark theme */
     --sidebar-background: 210 20% 15%;
     --sidebar-foreground: 210 30% 85%;
-    --sidebar-primary: 197 60% 70%;
-    --sidebar-primary-foreground: 210 30% 98%;
+    --sidebar-border: 210 20% 25%;
+    --sidebar-ring: 197 60% 55%;
     --sidebar-accent: 210 20% 28%;
     --sidebar-accent-foreground: 210 30% 92%;
-    --sidebar-border: 210 20% 30%;
-    --sidebar-ring: 197 60% 55%;
+    --sidebar-primary: 197 60% 70%;
+    --sidebar-primary-foreground: 210 20% 98%;
   }
 }
 
@@ -89,5 +89,7 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }

@@ -3,13 +3,17 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import type { UserRole } from '@prisma/client';
 
-// GET /api/users - Fetch all users
-export async function GET() {
+// GET /api/users - Fetch all users or users by supervisorId
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const supervisorId = searchParams.get('supervisorId');
+
   try {
     const users = await prisma.user.findMany({
+      where: supervisorId ? { supervisorId } : {},
       include: {
-        supervisor: true, // Include the supervisor details
-        supervisedEmployees: true, // Include employees supervised by this user
+        supervisor: true, 
+        supervisedEmployees: true, 
       },
       orderBy: {
         name: 'asc',
@@ -38,18 +42,17 @@ export async function POST(request: Request) {
         email,
         department,
         position,
-        hireDate: new Date(hireDate), // Ensure hireDate is a Date object
+        hireDate: new Date(hireDate), 
         avatarUrl,
-        role: role as UserRole, // Make sure role is a valid UserRole
+        role: role as UserRole, 
         supervisorId: supervisorId || null,
       },
     });
     return NextResponse.json(newUser, { status: 201 });
   } catch (error) {
     console.error("Error creating user:", error);
-    // Check for unique constraint violation for email
     if ((error as any).code === 'P2002' && (error as any).meta?.target?.includes('email')) {
-      return NextResponse.json({ message: 'Email already exists' }, { status: 409 });
+      return NextResponse.json({ message: 'This email address is already in use. Please choose another one.' }, { status: 409 });
     }
     return NextResponse.json({ message: 'Failed to create user', error: (error as Error).message }, { status: 500 });
   }

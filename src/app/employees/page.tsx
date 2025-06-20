@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { PlusCircle, Edit, Trash2, Search, Filter, MoreHorizontal, Eye } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Search, Filter, MoreHorizontal, Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/PageHeader";
 import {
@@ -28,7 +28,8 @@ import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { AppUser, UserRoleType } from "@/types"; // Updated import
+import { Skeleton } from "@/components/ui/skeleton";
+import type { AppUser } from "@/types";
 import { EmployeeForm } from "@/components/employees/EmployeeForm";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -48,6 +49,9 @@ export default function EmployeesPage() {
   const [selectedEmployeeIds, setSelectedEmployeeIds] = React.useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [employeeToDelete, setEmployeeToDelete] = React.useState<AppUser | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const [isSubmittingForm, setIsSubmittingForm] = React.useState(false);
+  
   const [isDetailDialogOpen, setIsDetailDialogOpen] = React.useState(false);
   const [viewingEmployee, setViewingEmployee] = React.useState<AppUser | null>(null);
   const { toast } = useToast();
@@ -56,21 +60,30 @@ export default function EmployeesPage() {
     setIsLoadingData(true);
     try {
       const usersRes = await fetch("/api/users");
-      if (!usersRes.ok) throw new Error("Failed to fetch users");
+      if (!usersRes.ok) {
+        const errorData = await usersRes.json().catch(() => ({ message: "Failed to fetch users" }));
+        throw new Error(errorData.message);
+      }
       const usersData = await usersRes.json();
       setEmployees(usersData);
 
-      const supervisorsRes = await fetch("/api/supervisors");
-      if (!supervisorsRes.ok) throw new Error("Failed to fetch supervisors");
-      const supervisorsData = await supervisorsRes.json();
-      setSupervisorsForForm(supervisorsData);
+      if(user?.role === 'ADMIN') { // Only admins need full supervisor list for forms
+        const supervisorsRes = await fetch("/api/supervisors");
+        if (!supervisorsRes.ok) {
+            const errorData = await supervisorsRes.json().catch(() => ({ message: "Failed to fetch supervisors" }));
+            throw new Error(errorData.message);
+        }
+        setSupervisorsForForm(await supervisorsRes.json());
+      }
 
     } catch (error) {
-      toast({ title: "Error fetching data", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "Error Fetching Data", description: (error as Error).message, variant: "destructive" });
+      setEmployees([]);
+      setSupervisorsForForm([]);
     } finally {
       setIsLoadingData(false);
     }
-  }, [toast]);
+  }, [toast, user?.role]);
 
   React.useEffect(() => {
     if (!authIsLoading && user) {
@@ -86,8 +99,6 @@ export default function EmployeesPage() {
 
   const filteredEmployees = React.useMemo(() => {
     let displayEmployees = employees;
-    // Supervisors see only employees they supervise directly, or themselves.
-    // Admins see all.
     if (user?.role === 'SUPERVISOR') {
       displayEmployees = employees.filter(emp => emp.supervisorId === user.id || emp.id === user.id);
     }
@@ -96,29 +107,24 @@ export default function EmployeesPage() {
       (employee) =>
         employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         employee.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        employee.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        employee.position.toLowerCase().includes(searchTerm.toLowerCase())
+        (employee.department && employee.department.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (employee.position && employee.position.toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [employees, searchTerm, user]);
-
-  if (authIsLoading || isLoadingData) {
-    return <div className="flex justify-center items-center h-screen">Loading employee data...</div>;
-  }
-  if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPERVISOR')) {
-    return <div className="flex justify-center items-center h-screen">Unauthorized access.</div>;
-  }
   
-  const canPerformWriteActions = user.role === 'ADMIN';
+  const canPerformAdminActions = user?.role === 'ADMIN';
 
   const handleAddEmployee = () => {
-    if (!canPerformWriteActions) return;
+    if (!canPerformAdminActions) {
+         toast({ title: "Permission Denied", description: "Only administrators can add new employees.", variant: "destructive" });
+        return;
+    }
     setEditingEmployee(null);
     setIsFormOpen(true);
   };
 
   const handleEditEmployee = (employee: AppUser) => {
-    // Admin can edit anyone. Supervisor can edit self.
-    if (!canPerformWriteActions && !(user.role === 'SUPERVISOR' && user.id === employee.id)) {
+    if (!canPerformAdminActions && !(user?.role === 'SUPERVISOR' && user.id === employee.id)) {
          toast({ title: "Permission Denied", description: "You do not have permission to edit this employee.", variant: "destructive" });
         return;
     }
@@ -127,32 +133,36 @@ export default function EmployeesPage() {
   };
   
   const handleDeleteEmployee = (employee: AppUser) => {
-    if (!canPerformWriteActions) return;
+    if (!canPerformAdminActions) {
+        toast({ title: "Permission Denied", description: "Only administrators can delete employees.", variant: "destructive" });
+        return;
+    }
     setEmployeeToDelete(employee);
     setShowDeleteConfirm(true);
   };
 
   const confirmDelete = async () => {
-    if (!canPerformWriteActions || !employeeToDelete) return;
-    
+    if (!canPerformAdminActions || !employeeToDelete) return;
+    setIsDeleting(true);
     try {
       const res = await fetch(`/api/users/${employeeToDelete.id}`, { method: 'DELETE' });
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Failed to delete employee");
+        const errorData = await res.json().catch(() => ({ message: "Failed to delete employee" }));
+        throw new Error(errorData.message);
       }
       toast({ title: "Employee Deleted", description: `${employeeToDelete.name} has been removed.` });
-      fetchData(); // Refetch data
+      fetchData(); 
       setSelectedEmployeeIds(prev => {
         const newSet = new Set(prev);
         if(employeeToDelete) newSet.delete(employeeToDelete.id);
         return newSet;
       });
     } catch (error) {
-      toast({ title: "Error deleting employee", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "Error Deleting Employee", description: (error as Error).message, variant: "destructive" });
     } finally {
       setShowDeleteConfirm(false);
       setEmployeeToDelete(null);
+      setIsDeleting(false);
     }
   };
 
@@ -161,22 +171,20 @@ export default function EmployeesPage() {
     setIsDetailDialogOpen(true);
   };
 
-  const handleFormSubmit = async (employeeData: AppUser) => {
-     // Admin can edit/add. Supervisor can only edit self (if form allows).
-    if (!canPerformWriteActions && !(editingEmployee && editingEmployee.id === user?.id && user.role === 'SUPERVISOR')) {
+  const handleFormSubmit = async (employeeData: AppUser, isEditing: boolean) => {
+    if (!user) return;
+    if (!canPerformAdminActions && !(isEditing && employeeData.id === user.id && (user.role === 'SUPERVISOR' || user.role === 'EMPLOYEE'))) {
         toast({ title: "Permission Denied", description: "You do not have permission to perform this action.", variant: "destructive" });
         return;
     }
-
-    const method = editingEmployee ? 'PUT' : 'POST';
-    const url = editingEmployee ? `/api/users/${editingEmployee.id}` : '/api/users';
-
-    // Ensure hireDate is just the date string if it includes time
+    setIsSubmittingForm(true);
+    const method = isEditing ? 'PUT' : 'POST';
+    const url = isEditing ? `/api/users/${employeeData.id}` : '/api/users';
+    
     const payload = { ...employeeData, hireDate: employeeData.hireDate.split('T')[0] };
-    if (!editingEmployee) { // For new employee, ID is not sent, backend generates
+    if (!isEditing) { 
       delete (payload as any).id;
     }
-
 
     try {
       const res = await fetch(url, {
@@ -185,21 +193,22 @@ export default function EmployeesPage() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || `Failed to ${editingEmployee ? 'update' : 'add'} employee`);
+        const errorData = await res.json().catch(() => ({ message: `Failed to ${isEditing ? 'update' : 'add'} employee` }));
+        throw new Error(errorData.message);
       }
-      toast({ title: `Employee ${editingEmployee ? 'Updated' : 'Added'}`, description: `${employeeData.name}'s details have been ${editingEmployee ? 'updated' : 'added'}.`});
-      fetchData(); // Refetch data
-    } catch (error) {
-      toast({ title: `Error ${editingEmployee ? 'updating' : 'adding'} employee`, description: (error as Error).message, variant: "destructive" });
-    } finally {
+      toast({ title: `Employee ${isEditing ? 'Updated' : 'Added'}`, description: `${employeeData.name}'s details have been saved.`});
+      fetchData(); 
       setIsFormOpen(false);
+    } catch (error) {
+      toast({ title: `Error ${isEditing ? 'Updating' : 'Adding'} Employee`, description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setIsSubmittingForm(false);
       setEditingEmployee(null);
     }
   };
 
   const handleSelectAll = (checked: boolean | 'indeterminate') => {
-    if (!canPerformWriteActions) return;
+    if (!canPerformAdminActions) return;
     if (checked === true) {
       setSelectedEmployeeIds(new Set(filteredEmployees.map(emp => emp.id)));
     } else {
@@ -208,7 +217,7 @@ export default function EmployeesPage() {
   };
 
   const handleSelectRow = (employeeId: string, checked: boolean) => {
-    if (!canPerformWriteActions) return;
+    if (!canPerformAdminActions) return;
     const newSelectedIds = new Set(selectedEmployeeIds);
     if (checked) {
       newSelectedIds.add(employeeId);
@@ -219,35 +228,40 @@ export default function EmployeesPage() {
   };
   
   const handleDeleteSelected = async () => {
-    if (!canPerformWriteActions || selectedEmployeeIds.size === 0) {
+    if (!canPerformAdminActions || selectedEmployeeIds.size === 0) {
         toast({ title: "Action Not Allowed", description: "You do not have permission or no employees selected.", variant: "destructive" });
         return;
     }
     
+    setIsDeleting(true);
     let deletedCount = 0;
-    let errorOccurred = false;
+    let errorMessages: string[] = [];
+
     for (const id of selectedEmployeeIds) {
         try {
             const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
             if (!res.ok) {
-                 const errorData = await res.json();
-                 throw new Error(`Failed for ${id}: ${errorData.message}`);
+                 const errorData = await res.json().catch(() => ({ message: `Failed to delete employee ID ${id}` }));
+                 throw new Error(errorData.message);
             }
             deletedCount++;
         } catch (error) {
-            toast({ title: "Error deleting employee", description: (error as Error).message, variant: "destructive" });
-            errorOccurred = true;
+            errorMessages.push((error as Error).message);
         }
     }
+    setIsDeleting(false);
 
     if (deletedCount > 0) {
-       toast({ title: "Employees Deleted", description: `${deletedCount} employee(s) have been removed.` });
+       toast({ title: "Employees Deleted", description: `${deletedCount} employee(s) removed. ${errorMessages.length > 0 ? `Errors on ${errorMessages.length} items.` : ''}` });
     }
-    if (!errorOccurred && deletedCount === 0){
-        toast({ title: "No Employees Deleted", description: "Selected employees might have already been removed or an issue occurred.", variant: "default" });
+    if (errorMessages.length > 0) {
+        toast({ title: "Some Deletions Failed", description: errorMessages.join('; '), variant: "destructive" });
+    }
+    if (deletedCount === 0 && errorMessages.length === 0){
+        toast({ title: "No Employees Deleted", description: "No action was performed.", variant: "default" });
     }
     
-    fetchData(); // Refetch data
+    fetchData(); 
     setSelectedEmployeeIds(new Set());
   };
 
@@ -255,14 +269,28 @@ export default function EmployeesPage() {
   const isAllSelected = filteredEmployees.length > 0 && selectedEmployeeIds.size === filteredEmployees.length;
   const isIndeterminate = selectedEmployeeIds.size > 0 && selectedEmployeeIds.size < filteredEmployees.length;
 
+  if (authIsLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Employee Records" description="Manage employee information, performance, and roles."/>
+        <Skeleton className="h-10 w-full sm:w-1/2" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPERVISOR')) {
+    return <div className="flex justify-center items-center h-screen">Unauthorized access. Please log in with appropriate credentials.</div>;
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Employee Records"
         description="Manage employee information, performance, and roles."
         actions={
-          canPerformWriteActions && (
-            <Button onClick={handleAddEmployee}>
+          canPerformAdminActions && (
+            <Button onClick={handleAddEmployee} disabled={isSubmittingForm || isLoadingData}>
               <PlusCircle className="mr-2 h-4 w-4" /> Add Employee
             </Button>
           )
@@ -278,28 +306,31 @@ export default function EmployeesPage() {
             className="pl-8 w-full"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            disabled={isLoadingData}
           />
         </div>
-        <Button variant="outline" onClick={() => toast({title: "Filter Clicked", description: "Filter functionality coming soon!"})}>
+        <Button variant="outline" onClick={() => toast({title: "Filter Clicked", description: "Advanced filter functionality coming soon!"})} disabled={isLoadingData}>
           <Filter className="mr-2 h-4 w-4" /> Filter
         </Button>
-        {canPerformWriteActions && selectedEmployeeIds.size > 0 && (
-           <Button variant="destructive" onClick={handleDeleteSelected}>
-             <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedEmployeeIds.size})
+        {canPerformAdminActions && selectedEmployeeIds.size > 0 && (
+           <Button variant="destructive" onClick={handleDeleteSelected} disabled={isDeleting || isLoadingData}>
+             {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />} 
+             Delete ({selectedEmployeeIds.size})
            </Button>
         )}
       </div>
 
-      <div className="rounded-lg border overflow-hidden shadow-sm bg-card">
+      <Card className="shadow-lg rounded-lg overflow-hidden border-border">
         <Table>
           <TableHeader>
             <TableRow>
-              {canPerformWriteActions && (
+              {canPerformAdminActions && (
                 <TableHead className="w-[50px]">
                    <Checkbox 
                       checked={isAllSelected || (isIndeterminate ? 'indeterminate' : false)}
                       onCheckedChange={handleSelectAll}
                       aria-label="Select all rows"
+                      disabled={isLoadingData || !filteredEmployees.length}
                     />
                 </TableHead>
               )}
@@ -314,10 +345,24 @@ export default function EmployeesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredEmployees.length > 0 ? (
+            {isLoadingData ? (
+                Array.from({length:5}).map((_, index) => (
+                    <TableRow key={`skeleton-${index}`}>
+                        {canPerformAdminActions && <TableCell><Skeleton className="h-5 w-5" /></TableCell>}
+                        <TableCell><Skeleton className="h-9 w-9 rounded-full" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                        <TableCell className="text-right"><Skeleton className="h-8 w-8" /></TableCell>
+                    </TableRow>
+                ))
+            ) : filteredEmployees.length > 0 ? (
               filteredEmployees.map((employee) => (
                 <TableRow key={employee.id} data-state={selectedEmployeeIds.has(employee.id) ? "selected" : ""}>
-                  {canPerformWriteActions && (
+                  {canPerformAdminActions && (
                     <TableCell>
                       <Checkbox 
                         checked={selectedEmployeeIds.has(employee.id)}
@@ -328,7 +373,7 @@ export default function EmployeesPage() {
                   )}
                   <TableCell>
                     <Avatar className="h-9 w-9">
-                      <AvatarImage src={employee.avatarUrl || undefined} alt={employee.name} data-ai-hint="person photo" />
+                      <AvatarImage src={employee.avatarUrl || undefined} alt={employee.name} data-ai-hint="person photo"/>
                       <AvatarFallback>{employee.name.substring(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </TableCell>
@@ -353,12 +398,12 @@ export default function EmployeesPage() {
                         <DropdownMenuItem onClick={() => handleViewDetails(employee)}>
                            <Eye className="mr-2 h-4 w-4" /> View Details
                         </DropdownMenuItem>
-                        {(canPerformWriteActions || (user.role === 'SUPERVISOR' && user.id === employee.id)) && (
+                        {(canPerformAdminActions || (user?.role === 'SUPERVISOR' && user.id === employee.id)) && (
                             <DropdownMenuItem onClick={() => handleEditEmployee(employee)}>
                               <Edit className="mr-2 h-4 w-4" /> Edit
                             </DropdownMenuItem>
                         )}
-                        {canPerformWriteActions && (
+                        {canPerformAdminActions && (
                           <>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteEmployee(employee)}>
@@ -373,40 +418,42 @@ export default function EmployeesPage() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={canPerformWriteActions ? 9 : 8} className="h-24 text-center">
+                <TableCell colSpan={canPerformAdminActions ? 9 : 8} className="h-24 text-center text-muted-foreground">
                   No employees found.
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
-      </div>
+      </Card>
       
-      {isFormOpen && (canPerformWriteActions || (editingEmployee && editingEmployee.id === user?.id)) && (
+      {isFormOpen && (user?.role === 'ADMIN' || (editingEmployee && editingEmployee.id === user?.id)) && (
         <EmployeeForm
           isOpen={isFormOpen}
           setIsOpen={setIsFormOpen}
           employee={editingEmployee}
           onSubmit={handleFormSubmit}
           supervisors={supervisorsForForm}
-          canEditAllFields={canPerformWriteActions || (!!editingEmployee && user.id === editingEmployee.id)} // User can edit own avatar/limited fields, admin can edit all
+          canEditAllFields={canPerformAdminActions}
+          isSubmitting={isSubmittingForm}
         />
       )}
 
-      {showDeleteConfirm && canPerformWriteActions && employeeToDelete && (
+      {showDeleteConfirm && canPerformAdminActions && employeeToDelete && (
         <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Confirm Deletion</DialogTitle>
               <DialogDescription>
-                Are you sure you want to delete employee {employeeToDelete?.name}? This action cannot be undone.
+                Are you sure you want to delete employee: <strong>{employeeToDelete?.name}</strong>? This action cannot be undone and may affect related records.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
-              </DialogClose>
-              <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
+              <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} disabled={isDeleting}>Cancel</Button>
+              <Button variant="destructive" onClick={confirmDelete} disabled={isDeleting}>
+                {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Delete
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -416,8 +463,8 @@ export default function EmployeesPage() {
         <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="flex items-center">
-                <Avatar className="h-10 w-10 mr-3">
+              <DialogTitle className="flex items-center gap-3">
+                <Avatar className="h-12 w-12 border">
                   <AvatarImage src={viewingEmployee.avatarUrl || undefined} alt={viewingEmployee.name} data-ai-hint="person photo" />
                   <AvatarFallback>{viewingEmployee.name.substring(0, 2).toUpperCase()}</AvatarFallback>
                 </Avatar>
@@ -427,33 +474,33 @@ export default function EmployeesPage() {
                 Detailed information for {viewingEmployee.name}.
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4 text-sm">
-              <div className="grid grid-cols-[100px_1fr] items-center gap-2">
-                <Label className="text-muted-foreground">Email:</Label>
+            <div className="grid gap-3 py-4 text-sm max-h-[60vh] overflow-y-auto pr-2">
+              <div className="grid grid-cols-[100px_1fr] items-start gap-2">
+                <Label className="text-muted-foreground font-semibold">Email:</Label>
                 <span>{viewingEmployee.email}</span>
               </div>
-              <div className="grid grid-cols-[100px_1fr] items-center gap-2">
-                <Label className="text-muted-foreground">Department:</Label>
+              <div className="grid grid-cols-[100px_1fr] items-start gap-2">
+                <Label className="text-muted-foreground font-semibold">Department:</Label>
                 <Badge variant="secondary">{viewingEmployee.department}</Badge>
               </div>
-              <div className="grid grid-cols-[100px_1fr] items-center gap-2">
-                <Label className="text-muted-foreground">Position:</Label>
+              <div className="grid grid-cols-[100px_1fr] items-start gap-2">
+                <Label className="text-muted-foreground font-semibold">Position:</Label>
                 <span>{viewingEmployee.position}</span>
               </div>
-              <div className="grid grid-cols-[100px_1fr] items-center gap-2">
-                <Label className="text-muted-foreground">Role:</Label>
+              <div className="grid grid-cols-[100px_1fr] items-start gap-2">
+                <Label className="text-muted-foreground font-semibold">Role:</Label>
                 <Badge variant="outline">{viewingEmployee.role.charAt(0) + viewingEmployee.role.slice(1).toLowerCase()}</Badge>
               </div>
-              <div className="grid grid-cols-[100px_1fr] items-center gap-2">
-                <Label className="text-muted-foreground">Hire Date:</Label>
+              <div className="grid grid-cols-[100px_1fr] items-start gap-2">
+                <Label className="text-muted-foreground font-semibold">Hire Date:</Label>
                 <span>{format(new Date(viewingEmployee.hireDate), "MMMM d, yyyy")}</span>
               </div>
-              <div className="grid grid-cols-[100px_1fr] items-center gap-2">
-                <Label className="text-muted-foreground">Supervisor:</Label>
+              <div className="grid grid-cols-[100px_1fr] items-start gap-2">
+                <Label className="text-muted-foreground font-semibold">Supervisor:</Label>
                 <span>{viewingEmployee.supervisor?.name || "N/A"}</span>
               </div>
             </div>
-            <DialogFooter>
+            <DialogFooter className="pt-4 border-t">
               <Button variant="outline" onClick={() => setIsDetailDialogOpen(false)}>
                 Close
               </Button>
