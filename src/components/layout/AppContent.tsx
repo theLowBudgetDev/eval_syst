@@ -22,8 +22,8 @@ import {
   Sheet,
   SheetContent,
   SheetTrigger,
-  SheetHeader as ShadSheetHeader, // Aliased for clarity
-  SheetTitle as ShadSheetTitle,   // Aliased for clarity
+  SheetHeader as ShadSheetHeader,
+  SheetTitle as ShadSheetTitle,
 } from '@/components/ui/sheet';
 import { Menu, Settings, LogOut } from 'lucide-react';
 import { getNavLinks, type NavLink as NavLinkType } from '@/lib/navigation';
@@ -136,7 +136,8 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
           </CustomSidebarFooter>
         </Sidebar>
 
-        <div className="flex flex-col flex-1 md:peer-data-[collapsible=icon]:ml-[var(--sidebar-width-icon)] peer-data-[collapsible=offcanvas]:ml-0 transition-[margin-left] duration-300 ease-in-out">
+        {/* Main content area wrapper: Removed md:peer-data-[collapsible=icon]:ml-[var(--sidebar-width-icon)] */}
+        <div className="flex flex-col flex-1 peer-data-[collapsible=offcanvas]:ml-0 transition-[margin-left] duration-300 ease-in-out">
           <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/95 backdrop-blur-sm px-4 md:px-6 justify-between">
             <div className="flex items-center gap-2">
               <Sheet open={isMobileSheetOpen} onOpenChange={setIsMobileSheetOpen}>
@@ -185,7 +186,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" asChild>
                      <Link href="/my-profile">
-                        <Avatar className="h-8 w-8">
+                        <Avatar className="h-8 w-8"> {/* Adjusted size */}
                             <AvatarImage src={user?.avatarUrl || undefined} alt={user?.name || "User"} data-ai-hint="person face"/>
                             <AvatarFallback>{user?.name ? user.name.substring(0, 2).toUpperCase() : "U"}</AvatarFallback>
                         </Avatar>
