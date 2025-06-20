@@ -24,10 +24,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { AppUser, UserRoleType } from "@/types";
-import { Loader2 } from "lucide-react";
+import { Loader2, FileUp } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
-const NO_SUPERVISOR_VALUE = "--NONE--"; // Represents unassigning/no supervisor
+const NO_SUPERVISOR_VALUE = "--NONE--"; 
 const USER_ROLES_OPTIONS: UserRoleType[] = ['ADMIN', 'SUPERVISOR', 'EMPLOYEE'];
 
 const employeeFormSchema = z.object({
@@ -37,8 +37,9 @@ const employeeFormSchema = z.object({
   position: z.string().min(1, "Position is required"),
   hireDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
   role: z.enum(USER_ROLES_OPTIONS, { errorMap: () => ({ message: "Invalid role" }) }),
-  supervisorId: z.string().optional().nullable(), 
+  supervisorId: z.string().optional().nullable(),
   avatarUrl: z.string().url("Invalid URL for avatar, ensure it includes http(s)://").optional().or(z.literal('')).nullable(),
+  avatarFile: z.instanceof(File).optional().nullable(),
 });
 
 type EmployeeFormData = z.infer<typeof employeeFormSchema>;
@@ -47,9 +48,9 @@ interface EmployeeFormProps {
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   employee?: AppUser | null;
-  onSubmit: (data: AppUser, isEditing: boolean) => Promise<void>;
+  onSubmit: (data: AppUser, isEditing: boolean, avatarFile?: File | null) => Promise<void>;
   supervisors: AppUser[];
-  canEditAllFields?: boolean; // True if admin or similar high-privilege user
+  canEditAllFields?: boolean;
   isSubmitting: boolean;
 }
 
@@ -64,14 +65,18 @@ export function EmployeeForm({
 }: EmployeeFormProps) {
   const { user: loggedInUser } = useAuth();
   const isEditingSelf = !!employee && employee.id === loggedInUser?.id;
+  const [selectedAvatarFile, setSelectedAvatarFile] = React.useState<File | null>(null);
+  const avatarFileRef = React.useRef<HTMLInputElement>(null);
+
 
   const {
     control,
     register,
     handleSubmit,
     reset,
-    formState: { errors, isDirty }, // isDirty can be used to enable/disable save if desired
+    formState: { errors, isDirty },
     setValue,
+    watch
   } = useForm<EmployeeFormData>({
     resolver: zodResolver(employeeFormSchema),
     defaultValues: {
@@ -81,13 +86,20 @@ export function EmployeeForm({
       position: "",
       hireDate: new Date().toISOString().split('T')[0],
       role: "EMPLOYEE",
-      supervisorId: NO_SUPERVISOR_VALUE, 
+      supervisorId: NO_SUPERVISOR_VALUE,
       avatarUrl: "",
+      avatarFile: null,
     },
   });
 
+  const currentAvatarUrl = watch("avatarUrl");
+
   React.useEffect(() => {
-    if (isOpen) { 
+    if (isOpen) {
+      setSelectedAvatarFile(null);
+      if (avatarFileRef.current) {
+        avatarFileRef.current.value = "";
+      }
       if (employee) {
         reset({
           name: employee.name,
@@ -96,8 +108,9 @@ export function EmployeeForm({
           position: employee.position,
           hireDate: employee.hireDate.split('T')[0],
           role: employee.role,
-          supervisorId: employee.supervisorId || NO_SUPERVISOR_VALUE, 
+          supervisorId: employee.supervisorId || NO_SUPERVISOR_VALUE,
           avatarUrl: employee.avatarUrl || "",
+          avatarFile: null,
         });
       } else {
         reset({
@@ -109,32 +122,43 @@ export function EmployeeForm({
           role: "EMPLOYEE",
           supervisorId: NO_SUPERVISOR_VALUE,
           avatarUrl: "",
+          avatarFile: null,
         });
       }
     }
   }, [employee, reset, isOpen]);
 
   const handleFormInternalSubmit = (data: EmployeeFormData) => {
+    // TODO: Implement actual file upload logic here.
+    // 1. If data.avatarFile is present, upload it to a service (e.g., Firebase Storage, S3).
+    // 2. Get the downloadable URL from the upload service.
+    // 3. Set submissionData.avatarUrl = newUrl;
+    // For now, we are passing the selectedAvatarFile to the onSubmit handler.
+    // The onSubmit handler in the parent page will need to manage the upload
+    // and update the avatarUrl before making the API call if it's implemented there.
+    // If not, the API will receive the old or an empty avatarUrl.
+
     const submissionData: AppUser = {
-      id: employee?.id || "", 
+      id: employee?.id || "",
       name: data.name,
       email: data.email,
       department: data.department,
       position: data.position,
-      hireDate: data.hireDate, 
+      hireDate: data.hireDate,
       role: data.role,
-      avatarUrl: data.avatarUrl || null,
+      // If a new file is selected, avatarUrl will be updated after upload by the parent.
+      // Otherwise, use the existing one (which could be empty if no file was ever uploaded).
+      avatarUrl: selectedAvatarFile ? "" : data.avatarUrl || null, // Placeholder for URL from upload
       supervisorId: data.supervisorId === NO_SUPERVISOR_VALUE ? null : data.supervisorId,
     };
-    onSubmit(submissionData, !!employee);
+    onSubmit(submissionData, !!employee, selectedAvatarFile);
   };
-  
-  // Determine field editability
-  // Admin can edit all. User editing self can edit avatar. Others can edit nothing.
+
   const coreFieldReadOnly = !canEditAllFields && !!employee && !isEditingSelf;
   const roleFieldReadOnly = !canEditAllFields;
-  const supervisorFieldReadOnly = !canEditAllFields && !!employee; // Generally only admin changes supervisor
-  const avatarFieldReadOnly = !canEditAllFields && !!employee && !isEditingSelf;
+  const supervisorFieldReadOnly = !canEditAllFields && !!employee;
+  const avatarFieldChangeAllowed = canEditAllFields || isEditingSelf;
+
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -238,16 +262,43 @@ export function EmployeeForm({
             </div>
 
           <div>
-              <Label htmlFor="avatarUrl">Avatar URL</Label>
-              <Input id="avatarUrl" {...register("avatarUrl")} className="mt-1" placeholder="https://placehold.co/100x100.png" readOnly={avatarFieldReadOnly} />
-              {errors.avatarUrl && <p className="text-sm text-destructive mt-1">{errors.avatarUrl.message}</p>}
+            <Label htmlFor="avatarFile">Avatar Image</Label>
+            <Input
+              id="avatarFile"
+              type="file"
+              accept="image/*"
+              className="mt-1 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+              ref={avatarFileRef}
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                setSelectedAvatarFile(file);
+                setValue("avatarFile", file, { shouldValidate: true });
+                 // Clear avatarUrl if a file is selected, actual URL will come from upload
+                if (file) setValue("avatarUrl", "");
+              }}
+              disabled={!avatarFieldChangeAllowed || isSubmitting}
+            />
+            {selectedAvatarFile && <p className="text-xs text-muted-foreground mt-1">Selected: {selectedAvatarFile.name}</p>}
+            {!selectedAvatarFile && currentAvatarUrl && <p className="text-xs text-muted-foreground mt-1">Current: <a href={currentAvatarUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View Image</a></p>}
+            {errors.avatarFile && <p className="text-sm text-destructive mt-1">{errors.avatarFile.message}</p>}
+            {errors.avatarUrl && !selectedAvatarFile && <p className="text-sm text-destructive mt-1">{errors.avatarUrl.message}</p>}
+             <p className="text-xs text-muted-foreground mt-1">Or provide an image URL (e.g., from Gravatar, company directory):</p>
+            <Input
+              id="avatarUrl"
+              {...register("avatarUrl")}
+              className="mt-1"
+              placeholder="https://placehold.co/100x100.png"
+              disabled={!avatarFieldChangeAllowed || isSubmitting || !!selectedAvatarFile}
+            />
+
           </div>
+
 
           <DialogFooter className="mt-4 pt-4 border-t">
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting || (!isDirty && !!employee) || (isEditingSelf && !canEditAllFields && !isDirty)}>
+            <Button type="submit" disabled={isSubmitting || (!isDirty && !!employee && !selectedAvatarFile) || (isEditingSelf && !canEditAllFields && !isDirty && !selectedAvatarFile)}>
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 {isSubmitting ? (employee ? "Saving..." : "Adding...") : (employee ? "Save Changes" : "Add Employee")}
             </Button>
@@ -257,3 +308,5 @@ export function EmployeeForm({
     </Dialog>
   );
 }
+
+    

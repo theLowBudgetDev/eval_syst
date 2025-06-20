@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import type { WorkOutput, AttendanceRecord, AppUser } from "@/types";
-import { FileText, CalendarCheck, PlusCircle } from "lucide-react";
+import { FileText, CalendarCheck, PlusCircle, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
@@ -29,8 +29,9 @@ import { Badge } from "@/components/ui/badge";
 interface NewWorkOutputData {
   title: string;
   description?: string;
-  fileUrl?: string;
+  fileUrl?: string; 
   submissionDate: string; // YYYY-MM-DD
+  file?: File | null; // For actual file upload
 }
 
 export default function MyProgressPage() {
@@ -41,6 +42,7 @@ export default function MyProgressPage() {
   const [myWorkOutputs, setMyWorkOutputs] = React.useState<WorkOutput[]>([]);
   const [myAttendance, setMyAttendance] = React.useState<AttendanceRecord[]>([]);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
+  const [isSubmittingWorkOutput, setIsSubmittingWorkOutput] = React.useState(false);
   
   const [isAddWorkDialogOpen, setIsAddWorkDialogOpen] = React.useState(false);
   const [newWorkOutput, setNewWorkOutput] = React.useState<NewWorkOutputData>({
@@ -48,13 +50,14 @@ export default function MyProgressPage() {
     submissionDate: format(new Date(), "yyyy-MM-dd"),
     description: "",
     fileUrl: "",
+    file: null,
   });
+  const workOutputFileRef = React.useRef<HTMLInputElement>(null);
 
   const fetchData = React.useCallback(async () => {
     if (!user) return;
     setIsLoadingData(true);
     try {
-      // Fetch user data which might include work outputs and attendance, or fetch them separately
       const userDetailsRes = await fetch(`/api/users/${user.id}`);
       if (!userDetailsRes.ok) throw new Error("Failed to fetch user data");
       const userData: AppUser = await userDetailsRes.json();
@@ -79,19 +82,31 @@ export default function MyProgressPage() {
     }
   }, [user, authIsLoading, router, fetchData]);
 
-  if (authIsLoading || isLoadingData || !user) {
-    return <div className="flex justify-center items-center h-screen">Loading progress...</div>;
-  }
 
   const handleAddWorkOutput = async () => {
     if (!user || !newWorkOutput.title) {
         toast({ title: "Error", description: "Title is required for work output.", variant: "destructive"});
         return;
     }
+    setIsSubmittingWorkOutput(true);
+
+    let finalFileUrl = newWorkOutput.fileUrl;
+    if (newWorkOutput.file) {
+      // ** Placeholder for actual file upload **
+      // 1. Upload `newWorkOutput.file` to a service.
+      // 2. Get the downloadable URL.
+      // 3. `finalFileUrl = newUrlFromUploadService;`
+      toast({ title: "File Selected", description: `File "${newWorkOutput.file.name}" would be uploaded. Using provided URL or empty for now.` });
+      // For demo, if a file is selected, we might clear the URL field or use a placeholder from upload service.
+      // finalFileUrl = ""; // Or the URL from your upload service
+    }
+
     const payload: Omit<WorkOutput, 'id' | 'employee'> = {
         employeeId: user.id,
-        ...newWorkOutput,
-        submissionDate: new Date(newWorkOutput.submissionDate).toISOString(), // Ensure ISO string for API
+        title: newWorkOutput.title,
+        description: newWorkOutput.description,
+        fileUrl: finalFileUrl,
+        submissionDate: new Date(newWorkOutput.submissionDate).toISOString(),
     };
 
     try {
@@ -105,14 +120,29 @@ export default function MyProgressPage() {
             throw new Error(errorData.message || "Failed to add work output");
         }
         const addedOutput = await res.json();
-        setMyWorkOutputs(prev => [addedOutput, ...prev]);
+        setMyWorkOutputs(prev => [addedOutput, ...prev].sort((a,b) => new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime()));
         toast({ title: "Work Output Added", description: `"${addedOutput.title}" has been recorded.`});
         setIsAddWorkDialogOpen(false);
-        setNewWorkOutput({ title: "", submissionDate: format(new Date(), "yyyy-MM-dd"), description: "", fileUrl: ""});
+        setNewWorkOutput({ title: "", submissionDate: format(new Date(), "yyyy-MM-dd"), description: "", fileUrl: "", file: null});
+        if (workOutputFileRef.current) workOutputFileRef.current.value = "";
     } catch (error) {
          toast({ title: "Error Adding Output", description: (error as Error).message, variant: "destructive"});
+    } finally {
+        setIsSubmittingWorkOutput(false);
     }
   };
+  
+  if (authIsLoading || isLoadingData || !user) {
+    return (
+        <div className="space-y-6">
+            <PageHeader title="My Progress Overview" description="Track your submitted work, attendance, and contributions."/>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card className="shadow-lg"><CardHeader><Skeleton className="h-6 w-3/4"/></CardHeader><CardContent><Skeleton className="h-40 w-full"/></CardContent></Card>
+                <Card className="shadow-lg"><CardHeader><Skeleton className="h-6 w-3/4"/></CardHeader><CardContent><Skeleton className="h-40 w-full"/></CardContent></Card>
+            </div>
+        </div>
+    );
+  }
 
 
   return (
@@ -121,8 +151,9 @@ export default function MyProgressPage() {
         title="My Progress Overview"
         description="Track your submitted work, attendance, and contributions."
         actions={
-            <Button onClick={() => setIsAddWorkDialogOpen(true)}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Add Work Output
+            <Button onClick={() => setIsAddWorkDialogOpen(true)} disabled={isSubmittingWorkOutput}>
+                {isSubmittingWorkOutput ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <PlusCircle className="mr-2 h-4 w-4" />}
+                 Add Work Output
             </Button>
         }
       />
@@ -144,12 +175,12 @@ export default function MyProgressPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {myWorkOutputs.slice(0, 5).map((output) => ( // Show recent 5
+                  {myWorkOutputs.slice(0, 5).map((output) => ( 
                     <TableRow key={output.id}>
                       <TableCell className="font-medium">{output.title}</TableCell>
                       <TableCell>{format(new Date(output.submissionDate), "PP")}</TableCell>
                       <TableCell className="text-sm text-muted-foreground truncate max-w-[200px]">
-                        {output.description || (output.fileUrl ? <a href={output.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View File</a> : "N/A")}
+                        {output.description || (output.fileUrl ? <a href={output.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View Link</a> : "N/A")}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -186,7 +217,7 @@ export default function MyProgressPage() {
                                 record.status === "PRESENT" ? "default" :
                                 record.status === "ON_LEAVE" ? "secondary" :
                                 record.status === "LATE" ? "outline" : 
-                                "destructive" // ABSENT
+                                "destructive" 
                             }
                             className={record.status === "LATE" ? "border-yellow-500 text-yellow-700 dark:border-yellow-400 dark:text-yellow-300" : ""}
                         >
@@ -205,7 +236,7 @@ export default function MyProgressPage() {
         </Card>
       </div>
       
-      <Dialog open={isAddWorkDialogOpen} onOpenChange={setIsAddWorkDialogOpen}>
+      <Dialog open={isAddWorkDialogOpen} onOpenChange={(open) => {if (!isSubmittingWorkOutput) setIsAddWorkDialogOpen(open)}}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Add New Work Output</DialogTitle>
@@ -221,6 +252,7 @@ export default function MyProgressPage() {
                     value={newWorkOutput.title} 
                     onChange={(e) => setNewWorkOutput({...newWorkOutput, title: e.target.value})}
                     placeholder="e.g., Q3 Marketing Report" 
+                    disabled={isSubmittingWorkOutput}
                 />
               </div>
               <div className="space-y-1">
@@ -228,8 +260,41 @@ export default function MyProgressPage() {
                 <Input 
                     id="wo-date" 
                     type="date"
-                    value={newWorkOutput.submissionDate} // Already YYYY-MM-DD
+                    value={newWorkOutput.submissionDate} 
                     onChange={(e) => setNewWorkOutput({...newWorkOutput, submissionDate: e.target.value})}
+                    disabled={isSubmittingWorkOutput}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="wo-file">Attach File (Optional)</Label>
+                <Input
+                    id="wo-file"
+                    type="file"
+                    ref={workOutputFileRef}
+                    className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                    onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        setNewWorkOutput(prev => ({...prev, file}));
+                        if (file) setNewWorkOutput(prev => ({...prev, fileUrl: ""})); // Clear URL if file is chosen
+                    }}
+                    disabled={isSubmittingWorkOutput}
+                />
+                {newWorkOutput.file && <p className="text-xs text-muted-foreground mt-1">Selected: {newWorkOutput.file.name}</p>}
+              </div>
+               <div className="space-y-1">
+                <Label htmlFor="wo-fileUrl">Or Provide File URL (Optional)</Label>
+                <Input 
+                    id="wo-fileUrl" 
+                    value={newWorkOutput.fileUrl}
+                    onChange={(e) => {
+                        setNewWorkOutput({...newWorkOutput, fileUrl: e.target.value});
+                        if (e.target.value && workOutputFileRef.current) {
+                             setNewWorkOutput(prev => ({...prev, file: null})); // Clear file if URL is typed
+                             workOutputFileRef.current.value = "";
+                        }
+                    }}
+                    placeholder="https://example.com/link/to/file" 
+                    disabled={isSubmittingWorkOutput || !!newWorkOutput.file}
                 />
               </div>
               <div className="space-y-1">
@@ -239,21 +304,16 @@ export default function MyProgressPage() {
                     value={newWorkOutput.description}
                     onChange={(e) => setNewWorkOutput({...newWorkOutput, description: e.target.value})}
                     placeholder="Brief summary of the work done." 
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="wo-fileUrl">File URL (Optional)</Label>
-                <Input 
-                    id="wo-fileUrl" 
-                    value={newWorkOutput.fileUrl}
-                    onChange={(e) => setNewWorkOutput({...newWorkOutput, fileUrl: e.target.value})}
-                    placeholder="https://example.com/link/to/file" 
+                    disabled={isSubmittingWorkOutput}
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAddWorkDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleAddWorkOutput}>Add Output</Button>
+              <Button variant="outline" onClick={() => setIsAddWorkDialogOpen(false)} disabled={isSubmittingWorkOutput}>Cancel</Button>
+              <Button onClick={handleAddWorkOutput} disabled={isSubmittingWorkOutput || !newWorkOutput.title}>
+                {isSubmittingWorkOutput && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Add Output
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

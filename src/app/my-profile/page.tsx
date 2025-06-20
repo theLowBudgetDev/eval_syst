@@ -27,19 +27,18 @@ export default function MyProfilePage() {
   const [supervisorsForForm, setSupervisorsForForm] = React.useState<AppUser[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   
-  // User details might update, so store a local copy for the page display
   const [currentUserDetails, setCurrentUserDetails] = React.useState<AppUser | null>(loggedInUser);
 
   React.useEffect(() => {
     if (!authIsLoading && !loggedInUser) {
       router.push('/login');
     } else if (loggedInUser) {
-        setCurrentUserDetails(loggedInUser); // Keep local state in sync with auth context
+        setCurrentUserDetails(loggedInUser);
     }
   }, [loggedInUser, authIsLoading, router]);
 
   const fetchSupervisors = async () => {
-    if (loggedInUser?.role !== 'ADMIN') { // Only admin form needs supervisors list
+    if (loggedInUser?.role !== 'ADMIN') {
         setSupervisorsForForm([]);
         return;
     }
@@ -57,31 +56,44 @@ export default function MyProfilePage() {
   };
 
   const handleOpenEditForm = () => {
-    if (loggedInUser?.role === 'ADMIN') { // Only fetch supervisors if admin might change them
+    if (loggedInUser?.role === 'ADMIN') {
         fetchSupervisors(); 
     }
     setIsFormOpen(true);
   }
 
-  const handleFormSubmit = async (employeeData: AppUser) => {
+  const handleFormSubmit = async (employeeData: AppUser, isEditing: boolean, avatarFile?: File | null) => {
     if (!loggedInUser || employeeData.id !== loggedInUser.id) {
         toast({ title: "Error", description: "Invalid operation. Cannot update profile.", variant: "destructive"});
         return;
     }
     setIsSubmitting(true);
     
-    const payload = { ...employeeData }; 
-    // Ensure hireDate is in 'YYYY-MM-DD' format if it's coming from a date picker that might add time
+    let finalAvatarUrl = employeeData.avatarUrl;
+
+    if (avatarFile) {
+      // ** Placeholder for actual file upload **
+      // In a real app, you would:
+      // 1. Upload `avatarFile` to a service (Firebase Storage, S3, etc.)
+      // 2. Get the downloadable URL from the service.
+      // 3. Set `finalAvatarUrl = newUrlFromUploadService;`
+      // For this example, we'll simulate this by just showing a toast.
+      // The API will receive whatever was in `employeeData.avatarUrl` or empty if cleared by file selection.
+      toast({ title: "File Selected", description: `File "${avatarFile.name}" would be uploaded here. Using existing/provided URL for now.` });
+      // For demo, if a file is selected, we might clear the URL or use a placeholder.
+      // finalAvatarUrl = ""; // Or the URL from your upload service
+    }
+    
+    const payload = { 
+        ...employeeData, 
+        avatarUrl: finalAvatarUrl 
+    };
     if (payload.hireDate && payload.hireDate.includes('T')) {
         payload.hireDate = payload.hireDate.split('T')[0];
     }
-    // For self-edit, role and supervisorId should not be changed by non-admins.
-    // The API should enforce this, but we can also restrict payload here.
     if (loggedInUser.role !== 'ADMIN') {
         delete (payload as any).role;
         delete (payload as any).supervisorId;
-        // Non-admins likely can only change avatar and maybe name/email (API dependent)
-        // For now, EmployeeForm with canEditAllFields=false handles UI restriction.
     }
 
 
@@ -96,8 +108,8 @@ export default function MyProfilePage() {
             throw new Error(errorData.message || "Failed to update profile");
         }
         const updatedUserFromApi: AppUser = await res.json();
-        updateAuthContextUser(updatedUserFromApi); // Update user in AuthContext and localStorage
-        setCurrentUserDetails(updatedUserFromApi); // Update local display state
+        updateAuthContextUser(updatedUserFromApi); 
+        setCurrentUserDetails(updatedUserFromApi); 
         toast({ title: "Profile Updated", description: "Your details have been successfully updated."});
         setIsFormOpen(false);
     } catch (error) {
@@ -202,3 +214,5 @@ export default function MyProfilePage() {
     </div>
   );
 }
+
+    
