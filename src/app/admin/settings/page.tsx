@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, Users, BellRing, Palette, Settings2, ShieldAlert, DatabaseZap, MessageCircle, Info } from "lucide-react";
+import { Save, Users, BellRing, Palette, Settings2, ShieldAlert, DatabaseZap, MessageCircle, Info, History } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -59,16 +59,6 @@ export default function AdminSettingsPage() {
     }, 1000);
   };
   
-  const handleComingSoon = (featureName: string) => {
-    toast({
-      title: "Coming Soon",
-      description: `${featureName} functionality is not yet implemented.`,
-      variant: "default",
-      duration: 3000,
-      action: <Info className="h-5 w-5 text-primary" />,
-    });
-  };
-
 
   return (
     <div className="space-y-8">
@@ -227,8 +217,8 @@ export default function AdminSettingsPage() {
               <CardContent className="pt-6 space-y-4">
                  <p className="text-muted-foreground">Data backup, export, and integration settings will appear here.</p>
                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => handleComingSoon("Data Backup")} disabled={isSaving}>Backup Data</Button>
-                    <Button variant="outline" onClick={() => handleComingSoon("Integration Management")} disabled={isSaving}>Manage Integrations</Button>
+                    <Button variant="outline" onClick={() => router.push('/admin/data-backup')} disabled={isSaving}>Backup Data</Button>
+                    <Button variant="outline" onClick={() => router.push('/admin/integrations')} disabled={isSaving}>Manage Integrations</Button>
                  </div>
               </CardContent>
             </AccordionContent>
@@ -251,7 +241,9 @@ export default function AdminSettingsPage() {
               <CardContent className="pt-6 space-y-4">
                  <p className="text-muted-foreground">Security settings, audit logs, and compliance tools will be available here.</p>
                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => handleComingSoon("Audit Logs")} disabled={isSaving}>View Audit Logs</Button>
+                    <Button variant="outline" onClick={() => router.push('/admin/audit-logs')} disabled={isSaving}>
+                        <History className="mr-2 h-4 w-4" /> View Audit Logs
+                    </Button>
                  </div>
               </CardContent>
             </AccordionContent>

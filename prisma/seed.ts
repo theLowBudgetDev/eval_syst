@@ -1,6 +1,6 @@
 
 import { PrismaClient } from '@prisma/client';
-import type { UserRoleType, AttendanceStatusType, MessageEventType, GoalStatusType } from '../src/types';
+import type { UserRoleType, AttendanceStatusType, MessageEventType, GoalStatusType, AuditActionType } from '../src/types';
 import { mockAuthUsers } from '../src/contexts/AuthContext'; 
 import {
   mockEvaluationCriteria,
@@ -16,14 +16,15 @@ async function main() {
   console.log('Start seeding ...');
 
   // Clear existing data
-  await prisma.goal.deleteMany(); // Clear goals first if they reference users
+  await prisma.auditLog.deleteMany();
+  await prisma.goal.deleteMany(); 
   await prisma.performanceScore.deleteMany();
   await prisma.workOutput.deleteMany();
   await prisma.attendanceRecord.deleteMany();
   await prisma.autoMessageTrigger.deleteMany();
   await prisma.evaluationCriteria.deleteMany();
-  await prisma.user.deleteMany({ where: { supervisorId: { not: null } } }); // Delete employees first
-  await prisma.user.deleteMany({ where: { supervisorId: null } }); // Then delete supervisors/admins
+  await prisma.user.deleteMany({ where: { supervisorId: { not: null } } }); 
+  await prisma.user.deleteMany({ where: { supervisorId: null } }); 
 
 
   const supervisorUsers = mockAuthUsers.filter(u => u.role === 'SUPERVISOR');
@@ -183,10 +184,8 @@ async function main() {
   }
   console.log('Seeded auto message triggers.');
 
-  // Seed Goals
-  const goalStatusOptions: GoalStatusType[] = ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "ON_HOLD"];
-  const employeeUserForGoal = employeeUsers[0]; // emp01
-  const supervisorUserForGoal = supervisorUsers[0]; // sup01
+  const employeeUserForGoal = employeeUsers[0]; 
+  const supervisorUserForGoal = supervisorUsers[0]; 
 
   if (createdUsersMap[employeeUserForGoal.id]) {
     await prisma.goal.create({
@@ -194,7 +193,7 @@ async function main() {
         title: "Complete Project Alpha Q3",
         description: "Finalize all modules for Project Alpha and deploy to staging.",
         status: "IN_PROGRESS",
-        dueDate: new Date(new Date().getFullYear(), new Date().getMonth() + 2, 15), // Due in ~2 months
+        dueDate: new Date(new Date().getFullYear(), new Date().getMonth() + 2, 15), 
         employeeId: createdUsersMap[employeeUserForGoal.id],
         supervisorId: createdUsersMap[employeeUserForGoal.supervisorId!] || null,
       },
@@ -216,11 +215,51 @@ async function main() {
         description: "Onboard and mentor two new engineers joining the team.",
         status: "IN_PROGRESS",
         dueDate: new Date(new Date().getFullYear(), new Date().getMonth() + 3, 1),
-        employeeId: createdUsersMap[supervisorUserForGoal.id], // Supervisor's own goal
+        employeeId: createdUsersMap[supervisorUserForGoal.id], 
       },
     });
   }
   console.log('Seeded goals.');
+
+  // Seed Audit Logs
+  const adminUserId = createdUsersMap[adminUsers[0].id];
+  const supervisorUserId = createdUsersMap[supervisorUsers[0].id];
+
+  if (adminUserId) {
+    await prisma.auditLog.create({
+      data: {
+        userId: adminUserId,
+        action: "USER_LOGIN" as AuditActionType,
+        details: { ipAddress: "192.168.1.100", userAgent: "Chrome/90.0" }
+      }
+    });
+    await prisma.auditLog.create({
+      data: {
+        userId: adminUserId,
+        action: "SETTINGS_UPDATE" as AuditActionType,
+        targetType: "Application",
+        details: { changedField: "appName", oldValue: "OldName", newValue: "EvalTrack" }
+      }
+    });
+  }
+  if (supervisorUserId && createdUsersMap[employeeUsers[0].id]) {
+     await prisma.auditLog.create({
+      data: {
+        userId: supervisorUserId,
+        action: "EVALUATION_CREATE" as AuditActionType,
+        targetType: "PerformanceScore",
+        targetId: "mockScoreId1", // Replace with actual ID if available after score seeding
+        details: { employeeEvaluated: employeeUsers[0].name }
+      }
+    });
+  }
+   await prisma.auditLog.create({
+      data: {
+        action: "SYSTEM_STARTUP" as AuditActionType, // Example of a system event
+        details: { message: "System initialized successfully." }
+      }
+    });
+  console.log('Seeded audit logs.');
 
 
   console.log('Seeding finished.');

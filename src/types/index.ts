@@ -20,6 +20,7 @@ export interface AppUser {
   attendanceRecords?: AttendanceRecord[];
   goalsAsEmployee?: Goal[];
   goalsAsSupervisor?: Goal[];
+  auditLogs?: AuditLog[];
 }
 
 export interface EvaluationCriteria {
@@ -126,3 +127,27 @@ export interface DashboardMetric {
   trend?: number;
   description?: string;
 }
+
+export type AuditActionType = 
+  | "USER_LOGIN" | "USER_LOGOUT"
+  | "USER_CREATE" | "USER_UPDATE" | "USER_DELETE"
+  | "GOAL_CREATE" | "GOAL_UPDATE" | "GOAL_DELETE"
+  | "EVALUATION_CREATE" | "EVALUATION_UPDATE" | "EVALUATION_DELETE"
+  | "SETTINGS_UPDATE" | "ASSIGNMENT_UPDATE"
+  | "TRIGGER_CREATE" | "TRIGGER_UPDATE" | "TRIGGER_DELETE"
+  | "CRITERIA_CREATE" | "CRITERIA_UPDATE" | "CRITERIA_DELETE"
+  | "ATTENDANCE_CREATE" | "ATTENDANCE_UPDATE" | "ATTENDANCE_DELETE"
+  | "WORK_OUTPUT_CREATE" | "WORK_OUTPUT_UPDATE" | "WORK_OUTPUT_DELETE";
+
+
+export interface AuditLog {
+  id: string;
+  timestamp: string; // ISO date string
+  userId?: string | null;
+  user?: AppUser; // User who performed the action
+  action: AuditActionType;
+  targetType?: string | null; // e.g., "User", "Goal", "EvaluationCriteria"
+  targetId?: string | null; // ID of the entity affected
+  details?: any | null; // JSON or string for additional context
+}
+
