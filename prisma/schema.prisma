@@ -1,0 +1,126 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id         String   @id @default(cuid())
+  name       String
+  email      String   @unique
+  department String
+  position   String
+  hireDate   DateTime
+  avatarUrl  String?
+  role       UserRole
+
+  supervisorId String?
+  supervisor   User?     @relation("SupervisedBy", fields: [supervisorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  supervised   User[]    @relation("SupervisedBy")
+
+  performanceScores PerformanceScore[] @relation("EmployeeScores")
+  evaluatedScores   PerformanceScore[] @relation("EvaluatorScores")
+  workOutputs       WorkOutput[]
+  attendanceRecords AttendanceRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum UserRole {
+  ADMIN
+  SUPERVISOR
+  EMPLOYEE
+}
+
+model EvaluationCriteria {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String
+  weight      Float?
+
+  performanceScores PerformanceScore[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model PerformanceScore {
+  id             String   @id @default(cuid())
+  employeeId     String
+  criteriaId     String
+  score          Int
+  comments       String?
+  evaluationDate DateTime
+  evaluatorId    String
+
+  employee  User               @relation("EmployeeScores", fields: [employeeId], references: [id], onDelete: Cascade)
+  criteria  EvaluationCriteria @relation(fields: [criteriaId], references: [id], onDelete: Cascade)
+  evaluator User               @relation("EvaluatorScores", fields: [evaluatorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([criteriaId])
+  @@index([evaluatorId])
+}
+
+model WorkOutput {
+  id             String   @id @default(cuid())
+  employeeId     String
+  title          String
+  description    String?
+  fileUrl        String?
+  submissionDate DateTime
+
+  employee User @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
+}
+
+model AttendanceRecord {
+  id         String           @id @default(cuid())
+  employeeId String
+  date       DateTime
+  status     AttendanceStatus
+  notes      String?
+
+  employee User @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  ON_LEAVE
+}
+
+model AutoMessageTrigger {
+  id              String           @id @default(cuid())
+  eventName       MessageEventType
+  messageTemplate String
+  isActive        Boolean          @default(true)
+  daysBeforeEvent Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum MessageEventType {
+  DEADLINE_APPROACHING
+  REVIEW_DUE
+  FEEDBACK_REQUEST
+  EVALUATION_COMPLETED
+  NEW_ASSIGNMENT
+}
