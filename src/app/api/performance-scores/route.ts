@@ -16,9 +16,14 @@ export async function GET() {
       }
     });
     return NextResponse.json(scores);
-  } catch (dbError: any) {
-    console.error("Prisma error fetching performance scores:", dbError);
-    return NextResponse.json({ message: 'Database error fetching performance scores.', error: dbError.message, code: dbError.code }, { status: 500 });
+  } catch (error: any) {
+    console.error("Critical error in GET /api/performance-scores:", error);
+    const errorMessage = error.message || 'An unexpected error occurred on the server.';
+    const errorCode = error.code;
+    return new Response(JSON.stringify({ message: 'Failed to fetch performance scores due to a server error.', error: errorMessage, code: errorCode }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
 
@@ -32,30 +37,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Missing required fields for performance score' }, { status: 400 });
     }
 
-    try {
-      const newScore = await prisma.performanceScore.create({
-        data: {
-          employeeId,
-          criteriaId,
-          score: parseInt(score, 10),
-          comments,
-          evaluationDate: new Date(evaluationDate),
-          evaluatorId,
-        },
-      });
-      return NextResponse.json(newScore, { status: 201 });
-    } catch (dbError: any) {
-      console.error("Prisma error creating performance score:", dbError);
-      if (dbError.code === 'P2003') { 
-          return NextResponse.json({ message: 'Invalid employee, criteria, or evaluator ID for performance score.' }, { status: 400 });
-      }
-      return NextResponse.json({ message: 'Database error creating performance score.', error: dbError.message, code: dbError.code }, { status: 500 });
-    }
+    const newScore = await prisma.performanceScore.create({
+      data: {
+        employeeId,
+        criteriaId,
+        score: parseInt(score, 10),
+        comments,
+        evaluationDate: new Date(evaluationDate),
+        evaluatorId,
+      },
+    });
+    return NextResponse.json(newScore, { status: 201 });
   } catch (error: any) {
-    console.error("Error in POST /api/performance-scores:", error);
+    console.error("Critical error in POST /api/performance-scores:", error);
+    let status = 500;
+    const responseBody: { message: string; error?: string; code?: string, details?: any } = {
+      message: 'Failed to create performance score due to a server error.',
+      error: error.message || 'An unexpected error occurred.',
+      code: error.code
+    };
+    
     if (error instanceof SyntaxError) {
-        return NextResponse.json({ message: 'Invalid JSON payload for performance score creation.'}, { status: 400 });
+        status = 400;
+        responseBody.message = 'Invalid JSON payload for performance score creation.';
+    } else if (error.code === 'P2003') { 
+        status = 400;
+        responseBody.message = 'Invalid employee, criteria, or evaluator ID for performance score.';
     }
-    return NextResponse.json({ message: 'Failed to create performance score', error: error.message }, { status: 500 });
+    
+    return new Response(JSON.stringify(responseBody), {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
