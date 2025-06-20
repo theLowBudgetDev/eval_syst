@@ -8,13 +8,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   SidebarProvider,
   Sidebar,
-  SidebarHeader as CustomSidebarHeader, // Renamed to avoid conflict
-  SidebarContent as CustomSidebarContent, // Renamed to avoid conflict
-  SidebarFooter as CustomSidebarFooter, // Renamed to avoid conflict
+  SidebarHeader as CustomSidebarHeader,
+  SidebarContent as CustomSidebarContent,
+  SidebarFooter as CustomSidebarFooter,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarTrigger
+  SidebarTrigger,
+  useSidebar // Added useSidebar import
 } from "@/components/ui/sidebar";
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -25,7 +26,7 @@ import {
   SheetHeader as ShadSheetHeader,
   SheetTitle as ShadSheetTitle,
 } from '@/components/ui/sheet';
-import { Menu, Settings, LogOut } from 'lucide-react';
+import { Menu, LogOut } from 'lucide-react';
 import { getNavLinks, type NavLink as NavLinkType } from '@/lib/navigation';
 import type { UserRoleType } from '@/types';
 import { DarkModeToggle } from '@/components/shared/DarkModeToggle';
@@ -65,7 +66,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const pathname = usePathname();
   const [isMobileSheetOpen, setIsMobileSheetOpen] = React.useState(false);
-
+  const sidebar = useSidebar(); // Get sidebar context
 
   React.useEffect(() => {
     if (!isLoading && !user && pathname !== '/login') {
@@ -108,14 +109,11 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     setIsMobileSheetOpen(false);
   };
   
-  const settingsPath = user?.role === 'ADMIN' ? "/admin/settings" : "/my-profile";
-
-
   return (
     <TooltipProvider>
       <SidebarProvider defaultOpen={false}> {/* Sidebar closed by default */}
         <Sidebar collapsible="icon" className="hidden md:flex border-r border-sidebar-border">
-          <CustomSidebarHeader className="p-4 h-16 flex items-center justify-center border-b border-sidebar-border"> {/* Added h-16 */}
+          <CustomSidebarHeader className="p-4 h-16 flex items-center justify-center border-b border-sidebar-border">
              <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-primary"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
                 <h1 className="text-xl font-bold font-headline tracking-tight group-data-[collapsible=icon]:hidden">EvalTrack</h1>
@@ -126,17 +124,31 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
               <RenderNavLinks role={user?.role || null} />
             </SidebarMenu>
           </CustomSidebarContent>
-          <CustomSidebarFooter className="p-2 mt-auto border-t border-sidebar-border group-data-[collapsible=icon]:justify-center">
-            <SidebarMenuButton className="group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:aspect-square" tooltip="Settings" asChild>
-              <Link href={settingsPath}>
-                  <Settings className="h-4 w-4" />
-                  <span className="group-data-[collapsible=icon]:hidden">Settings</span>
-              </Link>
-            </SidebarMenuButton>
+          <CustomSidebarFooter className="p-2 mt-auto border-t border-sidebar-border">
+            <div className="flex items-center gap-x-2 w-full group-data-[collapsible=icon]:justify-center">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link href="/my-profile" className="flex-shrink-0">
+                    <Avatar className="h-7 w-7 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
+                      <AvatarImage src={user?.avatarUrl || undefined} alt={user?.name || "User"} />
+                      <AvatarFallback>{user?.name ? user.name.substring(0, 1).toUpperCase() : "U"}</AvatarFallback>
+                    </Avatar>
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right" align="center" hidden={!sidebar || sidebar.state !== "collapsed" || sidebar.isMobile}>
+                  <p>{user?.name}</p>
+                  <p className="text-xs text-muted-foreground">{user?.email}</p>
+                </TooltipContent>
+              </Tooltip>
+              <div className="group-data-[collapsible=icon]:hidden flex-1 min-w-0">
+                <p className="text-sm font-medium text-sidebar-foreground truncate" title={user?.name}>{user?.name}</p>
+                <p className="text-xs text-sidebar-foreground/70 truncate" title={user?.email}>{user?.email}</p>
+              </div>
+            </div>
           </CustomSidebarFooter>
         </Sidebar>
 
-        <div className="flex flex-col flex-1"> {/* Removed peer-data specific margin classes */}
+        <div className="flex flex-col flex-1 md:peer-data-[state=expanded]:peer-data-[variant!=inset]:ml-[var(--sidebar-width)] peer-data-[state=collapsed]:peer-data-[variant!=inset]:ml-[var(--sidebar-width-icon)] transition-[margin-left] duration-200 ease-linear">
           <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/95 backdrop-blur-sm px-4 md:px-6 justify-between">
             <div className="flex items-center gap-2">
               <Sheet open={isMobileSheetOpen} onOpenChange={setIsMobileSheetOpen}>
@@ -152,7 +164,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
                 >
                   <ShadSheetHeader className="p-0"> 
                     <ShadSheetTitle className="sr-only">Main Navigation Menu</ShadSheetTitle>
-                     <CustomSidebarHeader className="p-4 h-16 flex items-center justify-start border-b border-sidebar-border"> {/* Added h-16 */}
+                     <CustomSidebarHeader className="p-4 h-16 flex items-center justify-start border-b border-sidebar-border">
                         <Link href="/" className="flex items-center gap-2" onClick={handleMobileLinkClick}>
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-primary"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
                           <h1 className="text-xl font-bold font-headline tracking-tight">EvalTrack</h1>
@@ -165,13 +177,17 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
                       </SidebarMenu>
                    </CustomSidebarContent>
                     <CustomSidebarFooter className="p-2 mt-auto border-t border-sidebar-border">
-                      <SidebarMenuButton tooltip="Settings" asChild onClick={handleMobileLinkClick}>
-                          <Link href={settingsPath}>
-                              <Settings className="h-4 w-4" />
-                              <span>Settings</span>
-                          </Link>
-                      </SidebarMenuButton>
-                  </CustomSidebarFooter>
+                       <Link href="/my-profile" className="flex items-center gap-2 p-1 rounded-md hover:bg-sidebar-accent" onClick={handleMobileLinkClick}>
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={user?.avatarUrl || undefined} alt={user?.name || "User"} />
+                            <AvatarFallback>{user?.name ? user.name.substring(0, 2).toUpperCase() : "U"}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-sidebar-foreground truncate" title={user?.name}>{user?.name}</p>
+                            <p className="text-xs text-sidebar-foreground/70 truncate" title={user?.email}>{user?.email}</p>
+                          </div>
+                        </Link>
+                    </CustomSidebarFooter>
                 </SheetContent>
               </Sheet>
               <div className="hidden md:block">
@@ -185,7 +201,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" asChild>
                      <Link href="/my-profile">
-                        <Avatar className="h-8 w-8"> {/* Adjusted size */}
+                        <Avatar className="h-8 w-8">
                             <AvatarImage src={user?.avatarUrl || undefined} alt={user?.name || "User"} data-ai-hint="person face"/>
                             <AvatarFallback>{user?.name ? user.name.substring(0, 2).toUpperCase() : "U"}</AvatarFallback>
                         </Avatar>
@@ -217,3 +233,5 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     </TooltipProvider>
   );
 }
+
+    
