@@ -22,6 +22,7 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,7 +68,7 @@ export default function EmployeesPage() {
       const usersData = await usersRes.json();
       setEmployees(usersData);
 
-      if(user?.role === 'ADMIN') { // Only admins need full supervisor list for forms
+      if(user?.role === 'ADMIN') { 
         const supervisorsRes = await fetch("/api/supervisors");
         if (!supervisorsRes.ok) {
             const errorData = await supervisorsRes.json().catch(() => ({ message: "Failed to fetch supervisors" }));
@@ -511,3 +512,5 @@ export default function EmployeesPage() {
     </div>
   );
 }
+
+    
