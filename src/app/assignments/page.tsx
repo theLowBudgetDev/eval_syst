@@ -33,13 +33,18 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { mockEmployees, mockSupervisors } from "@/lib/mockData";
-import type { Employee, SupervisorAssignment } from "@/types"; // Removed Supervisor type as it's not directly used for state here
+import type { Employee } from "@/types"; 
 import { UserPlus, UserCheck, Edit, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
 
 const NO_SUPERVISOR_VALUE = "--NONE--";
 
 export default function SupervisorAssignmentsPage() {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+
   const [assignments, setAssignments] = React.useState<Employee[]>(
     mockEmployees.map(emp => ({
       ...emp,
@@ -52,9 +57,19 @@ export default function SupervisorAssignmentsPage() {
   const [searchTerm, setSearchTerm] = React.useState("");
   const { toast } = useToast();
 
+  React.useEffect(() => {
+    if (!isLoading && user && user.role !== 'admin') {
+      router.push('/login'); // Or an unauthorized page
+    }
+  }, [user, isLoading, router]);
+
+  if (isLoading || !user || user.role !== 'admin') {
+    return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
+  }
+
   const handleOpenAssignDialog = (employee: Employee) => {
     setSelectedEmployee(employee);
-    setSelectedSupervisorId(employee.supervisorId); // This can be undefined
+    setSelectedSupervisorId(employee.supervisorId); 
     setIsAssignDialogOpen(true);
   };
 
@@ -67,17 +82,26 @@ export default function SupervisorAssignmentsPage() {
           : emp
       );
       setAssignments(updatedAssignments);
+      // Update mockEmployees as well if it's the source of truth for other pages
+      const employeeIndex = mockEmployees.findIndex(emp => emp.id === selectedEmployee.id);
+      if (employeeIndex !== -1) {
+        mockEmployees[employeeIndex] = { ...mockEmployees[employeeIndex], supervisorId: selectedSupervisorId, supervisorName: supervisorName };
+      }
       toast({
         title: "Supervisor Assigned",
         description: `${supervisorName} assigned to ${selectedEmployee.name}.`,
       });
-    } else if (selectedEmployee && (!selectedSupervisorId || selectedSupervisorId === NO_SUPERVISOR_VALUE)) { // Handles undefined or our special value
+    } else if (selectedEmployee && (!selectedSupervisorId || selectedSupervisorId === NO_SUPERVISOR_VALUE)) { 
        const updatedAssignments = assignments.map((emp) =>
         emp.id === selectedEmployee.id
           ? { ...emp, supervisorId: undefined, supervisorName: "N/A" }
           : emp
       );
       setAssignments(updatedAssignments);
+      const employeeIndex = mockEmployees.findIndex(emp => emp.id === selectedEmployee.id);
+      if (employeeIndex !== -1) {
+        mockEmployees[employeeIndex] = { ...mockEmployees[employeeIndex], supervisorId: undefined, supervisorName: "N/A" };
+      }
       toast({
         title: "Supervisor Unassigned",
         description: `Supervisor unassigned from ${selectedEmployee.name}.`,

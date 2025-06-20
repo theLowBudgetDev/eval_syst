@@ -11,12 +11,37 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Info, Save, Users, BellRing, Palette } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AdminSettingsPage() {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+  const { toast } = useToast();
+
   const [appName, setAppName] = React.useState("EvalTrack");
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
   const [emailNotifications, setEmailNotifications] = React.useState(true);
   const [systemTheme, setSystemTheme] = React.useState("system");
+
+  React.useEffect(() => {
+    if (!isLoading && user && user.role !== 'admin') {
+      router.push('/login'); 
+    }
+  }, [user, isLoading, router]);
+
+  if (isLoading || !user || user.role !== 'admin') {
+    return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
+  }
+
+  const handleSaveChanges = () => {
+    // In a real app, this would save to a backend
+    toast({
+        title: "Settings Saved",
+        description: "Your changes to the admin settings have been simulated as saved.",
+    });
+  };
 
   return (
     <div className="space-y-8">
@@ -24,7 +49,7 @@ export default function AdminSettingsPage() {
         title="Admin Settings"
         description="Manage system-wide configurations and perform administrative tasks."
         actions={
-          <Button>
+          <Button onClick={handleSaveChanges}>
             <Save className="mr-2 h-4 w-4" /> Save All Changes
           </Button>
         }
@@ -89,7 +114,7 @@ export default function AdminSettingsPage() {
               <Separator />
               <CardContent className="pt-6 space-y-4">
                 <p className="text-muted-foreground">User role and permission settings will appear here. (e.g., define roles like Admin, Supervisor, Employee).</p>
-                <Button variant="outline">Manage Roles</Button>
+                <Button variant="outline" onClick={() => toast({title: "Coming Soon", description: "User role management is not yet implemented."})}>Manage Roles</Button>
               </CardContent>
             </AccordionContent>
           </Card>
@@ -145,8 +170,8 @@ export default function AdminSettingsPage() {
               <CardContent className="pt-6 space-y-4">
                  <p className="text-muted-foreground">Data backup, export, and integration settings will appear here.</p>
                  <div className="flex gap-2">
-                    <Button variant="outline">Backup Data</Button>
-                    <Button variant="outline">Manage Integrations</Button>
+                    <Button variant="outline" onClick={() => toast({title: "Coming Soon", description: "Data backup is not yet implemented."})}>Backup Data</Button>
+                    <Button variant="outline" onClick={() => toast({title: "Coming Soon", description: "Integration management is not yet implemented."})}>Manage Integrations</Button>
                  </div>
               </CardContent>
             </AccordionContent>

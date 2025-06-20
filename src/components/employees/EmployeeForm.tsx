@@ -27,14 +27,13 @@ import type { Employee, Supervisor } from "@/types";
 
 const NO_SUPERVISOR_VALUE = "--NONE--";
 
-// Zod schema for form validation
 const employeeSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
   department: z.string().min(1, "Department is required"),
   position: z.string().min(1, "Position is required"),
   hireDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
-  supervisorId: z.string().optional(), // Will store actual ID or empty string from form
+  supervisorId: z.string().optional(), 
   avatarUrl: z.string().url("Invalid URL for avatar").optional().or(z.literal('')),
 });
 
@@ -46,6 +45,7 @@ interface EmployeeFormProps {
   employee?: Employee | null;
   onSubmit: (data: Employee) => void;
   supervisors: Supervisor[];
+  canEditAllFields?: boolean; // Added prop
 }
 
 export function EmployeeForm({
@@ -54,6 +54,7 @@ export function EmployeeForm({
   employee,
   onSubmit,
   supervisors,
+  canEditAllFields = false, // Default to false
 }: EmployeeFormProps) {
   const {
     control,
@@ -69,13 +70,13 @@ export function EmployeeForm({
       department: "",
       position: "",
       hireDate: new Date().toISOString().split('T')[0],
-      supervisorId: "", // react-hook-form state uses "" for no supervisor
+      supervisorId: "", 
       avatarUrl: "",
     },
   });
 
   React.useEffect(() => {
-    if (isOpen) { // Reset form only when dialog opens or employee changes
+    if (isOpen) { 
       if (employee) {
         reset({
           name: employee.name,
@@ -83,7 +84,7 @@ export function EmployeeForm({
           department: employee.department,
           position: employee.position,
           hireDate: employee.hireDate,
-          supervisorId: employee.supervisorId || "", // Ensure "" if undefined
+          supervisorId: employee.supervisorId || "", 
           avatarUrl: employee.avatarUrl || "",
         });
       } else {
@@ -101,16 +102,19 @@ export function EmployeeForm({
   }, [employee, reset, isOpen]);
 
   const handleFormSubmit = (data: EmployeeFormData) => {
-    // data.supervisorId will be "" if "No Supervisor" was selected, or actual ID.
     const supervisor = supervisors.find(s => s.id === data.supervisorId);
     const submissionData: Employee = {
       ...data,
-      id: employee?.id || `emp${Date.now()}`, // Basic ID generation for new employee
-      supervisorId: data.supervisorId === "" ? undefined : data.supervisorId, // Store undefined in actual data if no supervisor
+      id: employee?.id || `emp${Date.now()}`, 
+      supervisorId: data.supervisorId === NO_SUPERVISOR_VALUE || data.supervisorId === "" ? undefined : data.supervisorId,
       supervisorName: supervisor?.name,
     };
     onSubmit(submissionData);
   };
+
+  // Determine if fields should be read-only based on canEditAllFields and if it's an existing employee
+  const isReadOnly = !canEditAllFields && !!employee;
+
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -125,12 +129,12 @@ export function EmployeeForm({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="name">Full Name</Label>
-              <Input id="name" {...register("name")} className="mt-1" />
+              <Input id="name" {...register("name")} className="mt-1" readOnly={isReadOnly} />
               {errors.name && <p className="text-sm text-destructive mt-1">{errors.name.message}</p>}
             </div>
             <div>
               <Label htmlFor="email">Email Address</Label>
-              <Input id="email" type="email" {...register("email")} className="mt-1" />
+              <Input id="email" type="email" {...register("email")} className="mt-1" readOnly={isReadOnly}/>
               {errors.email && <p className="text-sm text-destructive mt-1">{errors.email.message}</p>}
             </div>
           </div>
@@ -138,12 +142,12 @@ export function EmployeeForm({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="department">Department</Label>
-              <Input id="department" {...register("department")} className="mt-1" />
+              <Input id="department" {...register("department")} className="mt-1" readOnly={isReadOnly} />
               {errors.department && <p className="text-sm text-destructive mt-1">{errors.department.message}</p>}
             </div>
             <div>
               <Label htmlFor="position">Position</Label>
-              <Input id="position" {...register("position")} className="mt-1" />
+              <Input id="position" {...register("position")} className="mt-1" readOnly={isReadOnly} />
               {errors.position && <p className="text-sm text-destructive mt-1">{errors.position.message}</p>}
             </div>
           </div>
@@ -151,7 +155,7 @@ export function EmployeeForm({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="hireDate">Hire Date</Label>
-              <Input id="hireDate" type="date" {...register("hireDate")} className="mt-1" />
+              <Input id="hireDate" type="date" {...register("hireDate")} className="mt-1" readOnly={isReadOnly} />
               {errors.hireDate && <p className="text-sm text-destructive mt-1">{errors.hireDate.message}</p>}
             </div>
             <div>
@@ -165,6 +169,7 @@ export function EmployeeForm({
                     onValueChange={(value) => {
                       field.onChange(value === NO_SUPERVISOR_VALUE ? "" : value);
                     }}
+                    disabled={isReadOnly} // Disable select if read-only
                   >
                     <SelectTrigger className="mt-1">
                       <SelectValue placeholder="Select a supervisor" />
@@ -185,14 +190,16 @@ export function EmployeeForm({
           </div>
           <div>
               <Label htmlFor="avatarUrl">Avatar URL (Optional)</Label>
-              <Input id="avatarUrl" {...register("avatarUrl")} className="mt-1" placeholder="https://placehold.co/100x100.png"/>
+              <Input id="avatarUrl" {...register("avatarUrl")} className="mt-1" placeholder="https://placehold.co/100x100.png" readOnly={isReadOnly && !canEditAllFields} /> {/* Avatar can be editable by self */}
               {errors.avatarUrl && <p className="text-sm text-destructive mt-1">{errors.avatarUrl.message}</p>}
             </div>
           <DialogFooter className="mt-4">
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit">{employee ? "Save Changes" : "Add Employee"}</Button>
+            <Button type="submit" disabled={isReadOnly && !canEditAllFields && !(employee && employee.avatarUrl !== control._formValues.avatarUrl)}> {/* Allow save if only avatar changed by self */}
+                {employee ? "Save Changes" : "Add Employee"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

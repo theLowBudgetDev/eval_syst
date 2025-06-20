@@ -19,21 +19,25 @@ import { mockAutoMessageTriggers } from "@/lib/mockData";
 import type { AutoMessageTrigger } from "@/types";
 import { PlusCircle, Edit, Trash2, BellRing, MessageSquareText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-// Placeholder for Dialog if implementing Add/Edit forms
-// import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-// import { Input } from "@/components/ui/input";
-// import { Textarea } from "@/components/ui/textarea";
-// import { Label } from "@/components/ui/label";
-// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
 
 
 export default function AutoMessagingPage() {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
   const [triggers, setTriggers] = React.useState<AutoMessageTrigger[]>(mockAutoMessageTriggers);
   const { toast } = useToast();
 
-  // const [isFormOpen, setIsFormOpen] = React.useState(false);
-  // const [editingTrigger, setEditingTrigger] = React.useState<AutoMessageTrigger | null>(null);
+  React.useEffect(() => {
+    if (!isLoading && user && user.role !== 'admin') {
+      router.push('/login'); 
+    }
+  }, [user, isLoading, router]);
+
+  if (isLoading || !user || user.role !== 'admin') {
+    return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
+  }
 
   const handleToggleActive = (triggerId: string) => {
     setTriggers((prevTriggers) =>
@@ -43,25 +47,20 @@ export default function AutoMessagingPage() {
     );
     const updatedTrigger = triggers.find(t => t.id === triggerId);
     toast({
-      title: `Trigger ${updatedTrigger && !updatedTrigger.isActive ? "Activated" : "Deactivated"}`,
-      description: `Trigger "${updatedTrigger?.eventName}" is now ${updatedTrigger && !updatedTrigger.isActive ? "active" : "inactive"}.`,
+      title: `Trigger ${updatedTrigger && !updatedTrigger.isActive ? "Activated" : "Deactivated"}`, // Logic was inverted
+      description: `Trigger "${updatedTrigger?.eventName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}" is now ${updatedTrigger && !updatedTrigger.isActive ? "active" : "inactive"}.`,
     });
   };
 
   const handleEditTrigger = (trigger: AutoMessageTrigger) => {
-    // setEditingTrigger(trigger);
-    // setIsFormOpen(true);
     toast({ title: "Coming Soon", description: "Edit trigger functionality will be available soon."});
   };
   
   const handleDeleteTrigger = (triggerId: string) => {
-    // setTriggers(prevTriggers => prevTriggers.filter(trigger => trigger.id !== triggerId));
     toast({ title: "Coming Soon", description: "Delete trigger functionality will be available soon."});
   };
 
   const handleAddNewTrigger = () => {
-    // setEditingTrigger(null);
-    // setIsFormOpen(true);
     toast({ title: "Coming Soon", description: "Add new trigger functionality will be available soon."});
   };
 
@@ -142,43 +141,6 @@ export default function AutoMessagingPage() {
           </Table>
         </CardContent>
       </Card>
-
-      {/* Placeholder for Add/Edit Dialog Form */}
-      {/* {isFormOpen && (
-        <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>{editingTrigger ? "Edit Trigger" : "Add New Trigger"}</DialogTitle>
-              <DialogDescription>
-                Configure the details for the automated message trigger.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-1">
-                <Label htmlFor="eventName">Event Name</Label>
-                 <Select> Implement Select for event types </Select>
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="messageTemplate">Message Template</Label>
-                <Textarea id="messageTemplate" placeholder="Hi {{employeeName}}, your task is due." />
-                <p className="text-xs text-muted-foreground">Use placeholders like {{employeeName}}, {{deadlineDate}}.</p>
-              </div>
-               <div className="space-y-1">
-                <Label htmlFor="daysBeforeEvent">Days Before Event (Optional)</Label>
-                <Input id="daysBeforeEvent" type="number" placeholder="e.g., 7" />
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch id="isActive" />
-                <Label htmlFor="isActive">Active</Label>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button>
-              <Button type="submit">Save Trigger</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )} */}
     </div>
   );
 }

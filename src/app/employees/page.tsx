@@ -33,8 +33,13 @@ import type { Employee } from "@/types";
 import { EmployeeForm } from "@/components/employees/EmployeeForm";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
 
 export default function EmployeesPage() {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+
   const [employees, setEmployees] = React.useState<Employee[]>(mockEmployees);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [isFormOpen, setIsFormOpen] = React.useState(false);
@@ -46,34 +51,58 @@ export default function EmployeesPage() {
   const [viewingEmployee, setViewingEmployee] = React.useState<Employee | null>(null);
   const { toast } = useToast();
 
-  const filteredEmployees = employees.filter(
-    (employee) =>
-      employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      employee.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      employee.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      employee.position.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  React.useEffect(() => {
+    if (!isLoading && user && user.role !== 'admin' && user.role !== 'supervisor') {
+      router.push('/login'); // Or an unauthorized page
+    }
+  }, [user, isLoading, router]);
+
+  const filteredEmployees = React.useMemo(() => {
+    let displayEmployees = employees;
+    if (user?.role === 'supervisor') {
+      displayEmployees = employees.filter(emp => emp.supervisorId === user.id || emp.id === user.id);
+    }
+    
+    return displayEmployees.filter(
+      (employee) =>
+        employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        employee.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        employee.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        employee.position.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [employees, searchTerm, user]);
+
+
+  if (isLoading || !user || (user.role !== 'admin' && user.role !== 'supervisor')) {
+    return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
+  }
+
+  const canPerformWriteActions = user.role === 'admin';
 
   const handleAddEmployee = () => {
+    if (!canPerformWriteActions) return;
     setEditingEmployee(null);
     setIsFormOpen(true);
   };
 
   const handleEditEmployee = (employee: Employee) => {
+    if (!canPerformWriteActions && user.id !== employee.id) return; // Supervisor can edit self if allowed by rules
     setEditingEmployee(employee);
     setIsFormOpen(true);
   };
   
   const handleDeleteEmployee = (employee: Employee) => {
+    if (!canPerformWriteActions) return;
     setEmployeeToDelete(employee);
     setShowDeleteConfirm(true);
   };
 
   const confirmDelete = () => {
-    if (employeeToDelete) {
-      setEmployees(employees.filter(emp => emp.id !== employeeToDelete.id));
-      toast({ title: "Employee Deleted", description: `${employeeToDelete.name} has been removed.` });
-    }
+    if (!canPerformWriteActions || !employeeToDelete) return;
+    
+    setEmployees(prevEmployees => prevEmployees.filter(emp => emp.id !== employeeToDelete.id));
+    toast({ title: "Employee Deleted", description: `${employeeToDelete.name} has been removed.` });
+    
     setShowDeleteConfirm(false);
     setEmployeeToDelete(null);
     setSelectedEmployeeIds(prev => {
@@ -89,13 +118,15 @@ export default function EmployeesPage() {
   };
 
   const handleFormSubmit = (employeeData: Employee) => {
+     if (!canPerformWriteActions && !(editingEmployee && editingEmployee.id === user.id) ) return;
+
     if (editingEmployee) {
       setEmployees(
         employees.map((emp) => (emp.id === employeeData.id ? employeeData : emp))
       );
       toast({ title: "Employee Updated", description: `${employeeData.name}'s details have been updated.`});
     } else {
-      const newEmployee = { ...employeeData, id: `emp${Date.now()}`}; // More unique ID
+      const newEmployee = { ...employeeData, id: `emp${Date.now()}`}; 
       setEmployees([...employees, newEmployee]);
       toast({ title: "Employee Added", description: `${newEmployee.name} has been added.`});
     }
@@ -104,6 +135,7 @@ export default function EmployeesPage() {
   };
 
   const handleSelectAll = (checked: boolean | 'indeterminate') => {
+    if (!canPerformWriteActions) return;
     if (checked === true) {
       setSelectedEmployeeIds(new Set(filteredEmployees.map(emp => emp.id)));
     } else {
@@ -112,6 +144,7 @@ export default function EmployeesPage() {
   };
 
   const handleSelectRow = (employeeId: string, checked: boolean) => {
+    if (!canPerformWriteActions) return;
     const newSelectedIds = new Set(selectedEmployeeIds);
     if (checked) {
       newSelectedIds.add(employeeId);
@@ -122,11 +155,17 @@ export default function EmployeesPage() {
   };
   
   const handleDeleteSelected = () => {
-    // This is a simplified bulk delete. In a real app, you'd confirm this action.
+    if (!canPerformWriteActions || selectedEmployeeIds.size === 0) {
+        toast({ title: "Action Not Allowed", description: "You do not have permission or no employees selected.", variant: "destructive" });
+        return;
+    }
+    
     const initialSize = employees.length;
     setEmployees(employees.filter(emp => !selectedEmployeeIds.has(emp.id)));
+    const currentEmployees = employees.filter(emp => !selectedEmployeeIds.has(emp.id));
+    const numDeleted = initialSize - currentEmployees.length;
     setSelectedEmployeeIds(new Set());
-    const numDeleted = initialSize - employees.filter(emp => !selectedEmployeeIds.has(emp.id)).length;
+
     if (numDeleted > 0) {
        toast({ title: "Employees Deleted", description: `${numDeleted} employee(s) have been removed.` });
     } else {
@@ -145,9 +184,11 @@ export default function EmployeesPage() {
         title="Employee Records"
         description="Manage employee information, performance, and roles."
         actions={
-          <Button onClick={handleAddEmployee}>
-            <PlusCircle className="mr-2 h-4 w-4" /> Add Employee
-          </Button>
+          canPerformWriteActions && (
+            <Button onClick={handleAddEmployee}>
+              <PlusCircle className="mr-2 h-4 w-4" /> Add Employee
+            </Button>
+          )
         }
       />
 
@@ -165,7 +206,7 @@ export default function EmployeesPage() {
         <Button variant="outline" onClick={() => alert("Filter functionality coming soon!")}>
           <Filter className="mr-2 h-4 w-4" /> Filter
         </Button>
-        {selectedEmployeeIds.size > 0 && (
+        {canPerformWriteActions && selectedEmployeeIds.size > 0 && (
            <Button variant="destructive" onClick={handleDeleteSelected}>
              <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedEmployeeIds.size})
            </Button>
@@ -176,13 +217,15 @@ export default function EmployeesPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[50px]">
-                 <Checkbox 
-                    checked={isAllSelected || (isIndeterminate ? 'indeterminate' : false)}
-                    onCheckedChange={handleSelectAll}
-                    aria-label="Select all rows"
-                  />
-              </TableHead>
+              {canPerformWriteActions && (
+                <TableHead className="w-[50px]">
+                   <Checkbox 
+                      checked={isAllSelected || (isIndeterminate ? 'indeterminate' : false)}
+                      onCheckedChange={handleSelectAll}
+                      aria-label="Select all rows"
+                    />
+                </TableHead>
+              )}
               <TableHead className="w-[80px]">Avatar</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Email</TableHead>
@@ -196,13 +239,15 @@ export default function EmployeesPage() {
             {filteredEmployees.length > 0 ? (
               filteredEmployees.map((employee) => (
                 <TableRow key={employee.id} data-state={selectedEmployeeIds.has(employee.id) ? "selected" : ""}>
-                  <TableCell>
-                    <Checkbox 
-                      checked={selectedEmployeeIds.has(employee.id)}
-                      onCheckedChange={(checked) => handleSelectRow(employee.id, !!checked)}
-                      aria-label={`Select row for ${employee.name}`}
-                    />
-                  </TableCell>
+                  {canPerformWriteActions && (
+                    <TableCell>
+                      <Checkbox 
+                        checked={selectedEmployeeIds.has(employee.id)}
+                        onCheckedChange={(checked) => handleSelectRow(employee.id, !!checked)}
+                        aria-label={`Select row for ${employee.name}`}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell>
                     <Avatar className="h-9 w-9">
                       <AvatarImage src={employee.avatarUrl} alt={employee.name} data-ai-hint="person photo" />
@@ -229,13 +274,19 @@ export default function EmployeesPage() {
                         <DropdownMenuItem onClick={() => handleViewDetails(employee)}>
                            <Eye className="mr-2 h-4 w-4" /> View Details
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleEditEmployee(employee)}>
-                          <Edit className="mr-2 h-4 w-4" /> Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteEmployee(employee)}>
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete
-                        </DropdownMenuItem>
+                        {(canPerformWriteActions || (user.role === 'supervisor' && user.id === employee.id)) && ( // Supervisor can edit own profile
+                            <DropdownMenuItem onClick={() => handleEditEmployee(employee)}>
+                              <Edit className="mr-2 h-4 w-4" /> Edit
+                            </DropdownMenuItem>
+                        )}
+                        {canPerformWriteActions && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteEmployee(employee)}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -243,7 +294,7 @@ export default function EmployeesPage() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center">
+                <TableCell colSpan={canPerformWriteActions ? 8 : 7} className="h-24 text-center">
                   No employees found.
                 </TableCell>
               </TableRow>
@@ -252,32 +303,35 @@ export default function EmployeesPage() {
         </Table>
       </div>
       
-      {isFormOpen && (
+      {isFormOpen && (canPerformWriteActions || (editingEmployee && editingEmployee.id === user?.id)) && (
         <EmployeeForm
           isOpen={isFormOpen}
           setIsOpen={setIsFormOpen}
           employee={editingEmployee}
           onSubmit={handleFormSubmit}
           supervisors={mockSupervisors}
+          canEditAllFields={canPerformWriteActions}
         />
       )}
 
-      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirm Deletion</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete employee {employeeToDelete?.name}? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {showDeleteConfirm && canPerformWriteActions && (
+        <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirm Deletion</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete employee {employeeToDelete?.name}? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {viewingEmployee && (
         <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>

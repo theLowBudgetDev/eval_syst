@@ -18,13 +18,21 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { mockAttendanceRecords, mockWorkOutputs, mockEmployees } from "@/lib/mockData";
-import type { AttendanceRecord, WorkOutput, Employee, AttendanceStatus } from "@/types";
-import { CalendarCheck, ListTodo, User, Search, Filter, Download, PlusCircle } from "lucide-react";
+import type { AttendanceRecord, WorkOutput, AttendanceStatus } from "@/types";
+import { CalendarCheck, ListTodo, Search, Download, PlusCircle } from "lucide-react"; // Removed User, Filter as they are not directly used or have placeholders
 import { format } from "date-fns";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
+import { useToast } from "@/hooks/use-toast";
+
 
 export default function ProgressMonitorPage() {
-  const [attendanceRecords, setAttendanceRecords] = React.useState<AttendanceRecord[]>(mockAttendanceRecords);
-  const [workOutputs, setWorkOutputs] = React.useState<WorkOutput[]>(mockWorkOutputs);
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+  const { toast } = useToast();
+
+  const [attendanceRecordsAll, setAttendanceRecordsAll] = React.useState<AttendanceRecord[]>(mockAttendanceRecords);
+  const [workOutputsAll, setWorkOutputsAll] = React.useState<WorkOutput[]>(mockWorkOutputs);
 
   const [attendanceSearchTerm, setAttendanceSearchTerm] = React.useState("");
   const [attendanceStatusFilter, setAttendanceStatusFilter] = React.useState<AttendanceStatus | "all">("all");
@@ -34,28 +42,71 @@ export default function ProgressMonitorPage() {
   const [workOutputEmployeeFilter, setWorkOutputEmployeeFilter] = React.useState<string>("all");
 
 
+  React.useEffect(() => {
+    if (!isLoading && user && user.role !== 'admin' && user.role !== 'supervisor') {
+      router.push('/login'); // Or an unauthorized page for employees if this page is admin/supervisor only
+    }
+  }, [user, isLoading, router]);
+
+
   const getEmployeeName = (employeeId: string) => {
     return mockEmployees.find(emp => emp.id === employeeId)?.name || "Unknown Employee";
   };
+  
+  const supervisedEmployeeIds = React.useMemo(() => {
+      if (user?.role === 'supervisor') {
+          return mockEmployees.filter(emp => emp.supervisorId === user.id).map(emp => emp.id);
+      }
+      return [];
+  }, [user]);
 
-  const filteredAttendanceRecords = attendanceRecords.filter(record => {
-    const employeeName = getEmployeeName(record.employeeId).toLowerCase();
-    const search = attendanceSearchTerm.toLowerCase();
-    const matchesSearch = employeeName.includes(search) || record.notes?.toLowerCase().includes(search);
-    const matchesStatus = attendanceStatusFilter === "all" || record.status === attendanceStatusFilter;
-    const matchesDate = !attendanceDateFilter || record.date === attendanceDateFilter;
-    return matchesSearch && matchesStatus && matchesDate;
-  });
+  const filteredAttendanceRecords = React.useMemo(() => {
+    let recordsToFilter = attendanceRecordsAll;
+    if (user?.role === 'supervisor') {
+        recordsToFilter = attendanceRecordsAll.filter(record => supervisedEmployeeIds.includes(record.employeeId));
+    }
 
-  const filteredWorkOutputs = workOutputs.filter(output => {
-    const employeeName = getEmployeeName(output.employeeId).toLowerCase();
-    const search = workOutputSearchTerm.toLowerCase();
-    const matchesSearch = employeeName.includes(search) || output.title.toLowerCase().includes(search) || output.description?.toLowerCase().includes(search);
-    const matchesEmployee = workOutputEmployeeFilter === "all" || output.employeeId === workOutputEmployeeFilter;
-    return matchesSearch && matchesEmployee;
-  });
+    return recordsToFilter.filter(record => {
+        const employeeName = getEmployeeName(record.employeeId).toLowerCase();
+        const search = attendanceSearchTerm.toLowerCase();
+        const matchesSearch = employeeName.includes(search) || record.notes?.toLowerCase().includes(search);
+        const matchesStatus = attendanceStatusFilter === "all" || record.status === attendanceStatusFilter;
+        const matchesDate = !attendanceDateFilter || record.date === attendanceDateFilter;
+        return matchesSearch && matchesStatus && matchesDate;
+    });
+  }, [attendanceRecordsAll, user, supervisedEmployeeIds, attendanceSearchTerm, attendanceStatusFilter, attendanceDateFilter]);
+
+  const filteredWorkOutputs = React.useMemo(() => {
+    let outputsToFilter = workOutputsAll;
+     if (user?.role === 'supervisor') {
+        outputsToFilter = workOutputsAll.filter(output => supervisedEmployeeIds.includes(output.employeeId));
+    }
+    
+    return outputsToFilter.filter(output => {
+        const employeeName = getEmployeeName(output.employeeId).toLowerCase();
+        const search = workOutputSearchTerm.toLowerCase();
+        const matchesSearch = employeeName.includes(search) || output.title.toLowerCase().includes(search) || output.description?.toLowerCase().includes(search);
+        // If supervisor, employee filter should be from their team or all (of their team)
+        const matchesEmployee = workOutputEmployeeFilter === "all" || output.employeeId === workOutputEmployeeFilter;
+        return matchesSearch && matchesEmployee;
+    });
+  }, [workOutputsAll, user, supervisedEmployeeIds, workOutputSearchTerm, workOutputEmployeeFilter]);
   
   const attendanceStatuses: AttendanceStatus[] = ["Present", "Absent", "Late", "On Leave"];
+
+  const employeesForFilter = React.useMemo(() => {
+    if (user?.role === 'supervisor') {
+        return mockEmployees.filter(emp => emp.supervisorId === user.id);
+    }
+    return mockEmployees; // Admin sees all
+  }, [user]);
+
+
+  if (isLoading || !user || (user.role !== 'admin' && user.role !== 'supervisor')) {
+    return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
+  }
+  
+  const canPerformWriteActions = user.role === 'admin'; // Or supervisor for certain actions like adding notes
 
 
   return (
@@ -64,7 +115,7 @@ export default function ProgressMonitorPage() {
         title="Progress Monitor"
         description="Monitor employee attendance, completed work, and overall progress."
         actions={
-            <Button variant="outline">
+            <Button variant="outline" onClick={() => toast({title: "Coming Soon", description: "Report export will be available soon."})}>
                 <Download className="mr-2 h-4 w-4" /> Export Report
             </Button>
         }
@@ -118,7 +169,7 @@ export default function ProgressMonitorPage() {
                     <TableHead>Date</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Notes</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    {(user.role === 'admin' || user.role === 'supervisor') && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -131,7 +182,7 @@ export default function ProgressMonitorPage() {
                             variant={
                                 record.status === "Present" ? "default" :
                                 record.status === "On Leave" ? "secondary" :
-                                record.status === "Late" ? "outline" : // Consider a warning color
+                                record.status === "Late" ? "outline" : 
                                 "destructive" // Absent
                             }
                             className={record.status === "Late" ? "border-yellow-500 text-yellow-700 dark:border-yellow-400 dark:text-yellow-300" : ""}
@@ -140,13 +191,15 @@ export default function ProgressMonitorPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{record.notes || "N/A"}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="outline" size="sm" onClick={() => alert(`Editing ${record.id}`)}>Edit</Button>
-                      </TableCell>
+                      {(user.role === 'admin' || user.role === 'supervisor') && (
+                        <TableCell className="text-right">
+                          <Button variant="outline" size="sm" onClick={() => toast({title: "Coming Soon", description: `Editing ${record.id} will be available soon.`})}>Edit</Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   )) : (
                      <TableRow>
-                        <TableCell colSpan={5} className="h-24 text-center">
+                        <TableCell colSpan={(user.role === 'admin' || user.role === 'supervisor') ? 5 : 4} className="h-24 text-center">
                             No attendance records found for the selected filters.
                         </TableCell>
                     </TableRow>
@@ -179,15 +232,18 @@ export default function ProgressMonitorPage() {
                     <SelectValue placeholder="Filter by employee" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Employees</SelectItem>
-                    {mockEmployees.map(emp => (
+                    <SelectItem value="all">All Employees {user?.role === 'supervisor' && "(My Team)"}</SelectItem>
+                    {employeesForFilter.map(emp => (
                         <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                 <Button variant="outline" onClick={() => alert("Adding new work output...")}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add Work Output
-                </Button>
+                 {/* Admin or Supervisor can add work outputs (perhaps for others, or supervisor for their team) */}
+                 {(user.role === 'admin' || user.role === 'supervisor') && (
+                    <Button variant="outline" onClick={() => toast({title: "Coming Soon", description: "Adding new work output will be available soon."})}>
+                        <PlusCircle className="mr-2 h-4 w-4" /> Add Work Output
+                    </Button>
+                 )}
               </div>
               <Table>
                 <TableHeader>
@@ -209,7 +265,7 @@ export default function ProgressMonitorPage() {
                         {output.description || (output.fileUrl ? <a href={output.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View File</a> : "N/A")}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="outline" size="sm" onClick={() => alert(`Viewing ${output.id}`)}>View Details</Button>
+                        <Button variant="outline" size="sm" onClick={() => toast({title: "Coming Soon", description: `Viewing ${output.id} will be available soon.`})}>View Details</Button>
                       </TableCell>
                     </TableRow>
                   )) : (

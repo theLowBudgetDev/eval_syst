@@ -1,12 +1,16 @@
-"use client"; // For charts and potential client-side interactions
+
+"use client"; 
 
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { mockDashboardMetrics, mockPerformanceTrendData, mockEvaluationDistributionData } from "@/lib/mockData";
-import type { DashboardMetric, ChartDataPoint } from "@/types";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import type { DashboardMetric } from "@/types";
+import { TrendingUp, TrendingDown, Minus, AlertTriangle, Users, ClipboardList } from "lucide-react";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Pie, PieChart, Cell, ResponsiveContainer, Line, LineChart } from "recharts";
+import { Line, LineChart, Pie, PieChart, Cell } from "recharts"; // Removed Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer as they are implicitly handled by ChartContainer or not directly used for these specific charts.
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
+import React from "react"; // Ensure React is imported
 
 const chartConfigPerformance = {
   'Avg Score': {
@@ -39,6 +43,23 @@ const chartConfigDistribution = {
 
 
 export default function DashboardPage() {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+
+  React.useEffect(() => {
+    if (!isLoading && user && user.role !== 'admin') {
+      // If user is not admin, redirect them from this page
+      if (user.role === 'supervisor') router.push('/supervisor-dashboard');
+      else if (user.role === 'employee') router.push('/employee-dashboard');
+      else router.push('/login'); // Fallback if role is somehow not set
+    }
+  }, [user, isLoading, router]);
+
+  if (isLoading || !user || user.role !== 'admin') {
+    return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
+  }
+
+
   return (
     <div className="space-y-6">
       <PageHeader title="Admin Dashboard" description="System summary and key performance indicators." />
@@ -57,7 +78,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <ChartContainer config={chartConfigPerformance} className="h-[300px] w-full">
-              <LineChart data={mockPerformanceTrendData} margin={{ left: 12, right: 12, top: 5, bottom: 5 }}>
+              <LineChart data={mockPerformanceTrendData} margin={{ left: 0, right: 0, top: 5, bottom: 5 }}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" />
                 <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} />
                 <YAxis domain={[0, 5]} tickLine={false} axisLine={false} tickMargin={8} />
@@ -76,7 +97,7 @@ export default function DashboardPage() {
           <CardContent className="flex items-center justify-center">
             <ChartContainer config={chartConfigDistribution} className="h-[300px] w-full max-w-xs">
               <PieChart>
-                <ChartTooltip content={<ChartTooltipContent nameKey="value" hideLabel />} />
+                <ChartTooltip content={<ChartTooltipContent nameKey="name" />} /> {/* Changed from nameKey="value" */}
                 <Pie 
                   data={mockEvaluationDistributionData} 
                   dataKey="value" 
@@ -85,7 +106,7 @@ export default function DashboardPage() {
                   cy="50%" 
                   outerRadius={100}
                   labelLine={false}
-                  label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }) => {
+                  label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => { // Removed index as it's not used
                     const RADIAN = Math.PI / 180;
                     const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
                     const x = cx + radius * Math.cos(-midAngle * RADIAN);
@@ -116,8 +137,9 @@ export default function DashboardPage() {
   );
 }
 
+// Ensure MetricCard's Icon prop is correctly typed if it comes from lucide-react or similar
 function MetricCard({ metric }: { metric: DashboardMetric }) {
-  const Icon = metric.icon;
+  const Icon = metric.icon || Users; // Provide a default icon
   const TrendIcon = metric.trend && metric.trend > 0 ? TrendingUp : metric.trend && metric.trend < 0 ? TrendingDown : Minus;
   const trendColor = metric.trend && metric.trend > 0 ? "text-green-600 dark:text-green-400" : metric.trend && metric.trend < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground";
 
@@ -143,3 +165,6 @@ function MetricCard({ metric }: { metric: DashboardMetric }) {
     </Card>
   );
 }
+
+// Need to explicitly import these from recharts for LineChart if not implicitly handled by ChartContainer
+import { CartesianGrid, XAxis, YAxis } from 'recharts';
