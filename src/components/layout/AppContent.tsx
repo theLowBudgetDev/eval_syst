@@ -8,9 +8,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   SidebarProvider,
   Sidebar,
-  SidebarHeader, // This is the custom div-based header from ui/sidebar
-  SidebarContent, // This is the custom div-based content from ui/sidebar
-  SidebarFooter,
+  SidebarHeader as CustomSidebarHeader, // Renamed to avoid conflict
+  SidebarContent as CustomSidebarContent, // Renamed to avoid conflict
+  SidebarFooter as CustomSidebarFooter, // Renamed to avoid conflict
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
@@ -20,8 +20,10 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Sheet,
-  SheetContent, // This is the actual DialogPrimitive.Content from ui/sheet
+  SheetContent,
   SheetTrigger,
+  SheetHeader as ShadSheetHeader, // Aliased for clarity
+  SheetTitle as ShadSheetTitle,   // Aliased for clarity
 } from '@/components/ui/sheet';
 import { Menu, Settings, LogOut } from 'lucide-react';
 import { getNavLinks, type NavLink as NavLinkType } from '@/lib/navigation';
@@ -30,7 +32,7 @@ import { DarkModeToggle } from '@/components/shared/DarkModeToggle';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-function RenderNavLinks({ role }: { role: UserRoleType | null }) {
+function RenderNavLinks({ role, onLinkClick }: { role: UserRoleType | null, onLinkClick?: () => void }) {
   const navLinks = getNavLinks(role);
   const renderLinks = (links: NavLinkType[], isSubLink = false) => {
     return links.map((link) => (
@@ -39,6 +41,7 @@ function RenderNavLinks({ role }: { role: UserRoleType | null }) {
           asChild
           className={isSubLink ? "text-sm pl-10" : ""}
           tooltip={link.label}
+          onClick={onLinkClick} // Close mobile sidebar on link click
         >
           <Link href={link.href}>
             <link.icon className="h-4 w-4" />
@@ -61,6 +64,8 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   const { user, logout, isLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const [isMobileSheetOpen, setIsMobileSheetOpen] = React.useState(false);
+
 
   React.useEffect(() => {
     if (!isLoading && !user && pathname !== '/login') {
@@ -98,36 +103,43 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   if (!user) {
     return null;
   }
+  
+  const handleMobileLinkClick = () => {
+    setIsMobileSheetOpen(false);
+  };
+  
+  const settingsPath = user?.role === 'ADMIN' ? "/admin/settings" : "/my-profile";
+
 
   return (
     <TooltipProvider>
       <SidebarProvider defaultOpen={true}>
         <Sidebar collapsible="icon" className="hidden md:flex border-r border-sidebar-border">
-          <SidebarHeader className="p-4 flex items-center justify-center border-b border-sidebar-border">
+          <CustomSidebarHeader className="p-4 flex items-center justify-center border-b border-sidebar-border">
              <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-primary"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
                 <h1 className="text-xl font-bold font-headline tracking-tight group-data-[collapsible=icon]:hidden">EvalTrack</h1>
              </Link>
-          </SidebarHeader>
-          <SidebarContent className="p-2">
+          </CustomSidebarHeader>
+          <CustomSidebarContent className="p-2">
             <SidebarMenu>
               <RenderNavLinks role={user?.role || null} />
             </SidebarMenu>
-          </SidebarContent>
-          <SidebarFooter className="p-2 mt-auto border-t border-sidebar-border group-data-[collapsible=icon]:justify-center">
+          </CustomSidebarContent>
+          <CustomSidebarFooter className="p-2 mt-auto border-t border-sidebar-border group-data-[collapsible=icon]:justify-center">
             <SidebarMenuButton className="group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:aspect-square" tooltip="Settings" asChild>
-              <Link href={user?.role === 'ADMIN' ? "/admin/settings" : "/my-profile"}>
+              <Link href={settingsPath}>
                   <Settings className="h-4 w-4" />
                   <span className="group-data-[collapsible=icon]:hidden">Settings</span>
               </Link>
             </SidebarMenuButton>
-          </SidebarFooter>
+          </CustomSidebarFooter>
         </Sidebar>
 
         <div className="flex flex-col flex-1 md:peer-data-[collapsible=icon]:ml-[var(--sidebar-width-icon)] peer-data-[collapsible=offcanvas]:ml-0 transition-[margin-left] duration-300 ease-in-out">
           <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/95 backdrop-blur-sm px-4 md:px-6 justify-between">
             <div className="flex items-center gap-2">
-              <Sheet>
+              <Sheet open={isMobileSheetOpen} onOpenChange={setIsMobileSheetOpen}>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open sidebar">
                     <Menu className="h-5 w-5" />
@@ -136,28 +148,30 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
                 <SheetContent
                   side="left"
                   className="p-0 w-[var(--sidebar-width-mobile,280px)] flex flex-col bg-sidebar"
-                  aria-label="Main Navigation Menu" // Added aria-label for accessibility
+                  aria-label="Main Navigation Menu" 
                 >
-                   {/* Visual Header with Logo (uses custom SidebarHeader component from ui/sidebar) */}
-                   <SidebarHeader className="p-4 flex items-center justify-start border-b border-sidebar-border">
-                      <Link href="/" className="flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-primary"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
-                        <h1 className="text-xl font-bold font-headline tracking-tight">EvalTrack</h1>
-                      </Link>
-                   </SidebarHeader>
-                   <SidebarContent className="flex-1 p-2"> {/* Custom SidebarContent from ui/sidebar */}
+                  <ShadSheetHeader className="p-0"> 
+                    <ShadSheetTitle className="sr-only">Main Navigation Menu</ShadSheetTitle>
+                     <CustomSidebarHeader className="p-4 flex items-center justify-start border-b border-sidebar-border">
+                        <Link href="/" className="flex items-center gap-2" onClick={handleMobileLinkClick}>
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-primary"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
+                          <h1 className="text-xl font-bold font-headline tracking-tight">EvalTrack</h1>
+                        </Link>
+                     </CustomSidebarHeader>
+                  </ShadSheetHeader>
+                   <CustomSidebarContent className="flex-1 p-2">
                       <SidebarMenu>
-                        <RenderNavLinks role={user?.role || null} />
+                        <RenderNavLinks role={user?.role || null} onLinkClick={handleMobileLinkClick} />
                       </SidebarMenu>
-                   </SidebarContent>
-                    <SidebarFooter className="p-2 mt-auto border-t border-sidebar-border"> {/* Custom SidebarFooter from ui/sidebar */}
-                      <SidebarMenuButton tooltip="Settings" asChild>
-                          <Link href={user?.role === 'ADMIN' ? "/admin/settings" : "/my-profile"}>
+                   </CustomSidebarContent>
+                    <CustomSidebarFooter className="p-2 mt-auto border-t border-sidebar-border">
+                      <SidebarMenuButton tooltip="Settings" asChild onClick={handleMobileLinkClick}>
+                          <Link href={settingsPath}>
                               <Settings className="h-4 w-4" />
                               <span>Settings</span>
                           </Link>
                       </SidebarMenuButton>
-                  </SidebarFooter>
+                  </CustomSidebarFooter>
                 </SheetContent>
               </Sheet>
               <div className="hidden md:block">
@@ -165,12 +179,24 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 md:gap-3">
               <DarkModeToggle />
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={user?.avatarUrl || undefined} alt={user?.name || "User"} data-ai-hint="person face"/>
-                <AvatarFallback>{user?.name ? user.name.substring(0, 2).toUpperCase() : "U"}</AvatarFallback>
-              </Avatar>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" asChild>
+                     <Link href="/my-profile">
+                        <Avatar className="h-8 w-8">
+                            <AvatarImage src={user?.avatarUrl || undefined} alt={user?.name || "User"} data-ai-hint="person face"/>
+                            <AvatarFallback>{user?.name ? user.name.substring(0, 2).toUpperCase() : "U"}</AvatarFallback>
+                        </Avatar>
+                        <span className="sr-only">My Profile</span>
+                     </Link>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>My Profile</p>
+                </TooltipContent>
+              </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" onClick={logout} aria-label="Logout">
@@ -191,4 +217,3 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     </TooltipProvider>
   );
 }
-

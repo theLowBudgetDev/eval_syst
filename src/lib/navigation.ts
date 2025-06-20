@@ -1,6 +1,6 @@
 
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Users, ClipboardList, LineChart, UserCheck, Settings, Bell, LogIn, UserCog } from "lucide-react";
+import { LayoutDashboard, Users, ClipboardList, LineChart, UserCheck, Settings, Bell, LogIn, UserCog, Target } from "lucide-react";
 import type { UserRoleType } from "@/types"; // Using UserRoleType from types
 
 export interface NavLink {
@@ -68,6 +68,12 @@ const allNavLinks: NavLink[] = [
     roles: ["EMPLOYEE"],
   },
   {
+    href: "/goals",
+    label: "Goals",
+    icon: Target,
+    roles: ["ADMIN", "SUPERVISOR", "EMPLOYEE"],
+  },
+  {
     href: "/assignments",
     label: "Supervisor Assignments",
     icon: UserCheck,
@@ -77,6 +83,12 @@ const allNavLinks: NavLink[] = [
     href: "/messaging",
     label: "Auto Messaging",
     icon: Bell,
+    roles: ["ADMIN"],
+  },
+  {
+    href: "/admin/settings", // Changed from /settings to /admin/settings to be more specific
+    label: "Admin Settings",
+    icon: Settings,
     roles: ["ADMIN"],
   },
   {
@@ -90,9 +102,12 @@ const allNavLinks: NavLink[] = [
 
 export function getNavLinks(role: UserRoleType | null | undefined): NavLink[] {
   if (!role) {
+    // For logged-out users, only show the login link if it's defined
     return allNavLinks.filter(link => link.href === '/login');
   }
+  // For logged-in users, filter by role and exclude the login link
   return allNavLinks.filter(link => {
-    return !link.roles || link.roles.length === 0 || link.roles.includes(role);
-  }).filter(link => link.href !== '/login'); 
+    // Show link if no roles are specified OR if the user's role is included
+    return (link.roles && link.roles.includes(role)) || (link.roles && link.roles.length === 0 && link.href !== '/login');
+  }).filter(link => link.href !== '/login'); // Ensure login link is not shown to authenticated users
 }
