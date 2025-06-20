@@ -1,93 +1,108 @@
+
 datasource db {
   provider = "sqlite"
   url      = "file:./dev.db"
 }
 
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-1.1.x"]
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "debian-openssl-1.1.x"]
 }
 
 model User {
-  id                        String                @id @default(cuid())
+  id                        String    @id @default(cuid())
   name                      String
-  email                     String                @unique
+  email                     String    @unique
   department                String
   position                  String
   hireDate                  DateTime
   avatarUrl                 String?
-  role                      String // Was UserRole enum
+  role                      String    // UserRoleType: ADMIN, SUPERVISOR, EMPLOYEE
   supervisorId              String?
-  supervisor                User?                 @relation("SupervisorToEmployees", fields: [supervisorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  supervisedEmployees       User[]                @relation("SupervisorToEmployees")
-  performanceScoresReceived PerformanceScore[]    @relation("EmployeeScores")
-  performanceScoresGiven    PerformanceScore[]    @relation("EvaluatorScores")
+  supervisor                User?     @relation("Supervision", fields: [supervisorId], references: [id], onDelete: SetNull)
+  supervisedEmployees       User[]    @relation("Supervision")
+  
+  performanceScoresReceived PerformanceScore[] @relation("EmployeeScores")
+  performanceScoresGiven    PerformanceScore[] @relation("EvaluatorScores")
+  
   workOutputs               WorkOutput[]
   attendanceRecords         AttendanceRecord[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  goalsAsEmployee           Goal[] @relation("EmployeeGoals")
+  goalsAsSupervisor         Goal[] @relation("SupervisorGoals") // Goals this supervisor might oversee or create
+
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 }
 
 model EvaluationCriteria {
-  id                String             @id @default(cuid())
-  name              String
-  description       String
-  weight            Float?
-  performanceScores PerformanceScore[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  name               String   @unique
+  description        String
+  weight             Float? // e.g., 0.2 for 20%
+  performanceScores  PerformanceScore[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model PerformanceScore {
-  id             String             @id @default(cuid())
-  employeeId     String
-  employee       User               @relation("EmployeeScores", fields: [employeeId], references: [id], onDelete: Cascade)
-  criteriaId     String
-  criteria       EvaluationCriteria @relation(fields: [criteriaId], references: [id], onDelete: Cascade)
-  score          Int
-  comments       String?
-  evaluationDate DateTime
-  evaluatorId    String?
-  evaluator      User?              @relation("EvaluatorScores", fields: [evaluatorId], references: [id], onDelete: SetNull) // SetNull if evaluator is deleted
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String      @id @default(cuid())
+  employeeId      String
+  employee        User        @relation("EmployeeScores", fields: [employeeId], references: [id], onDelete: Cascade)
+  criteriaId      String
+  criteria        EvaluationCriteria @relation(fields: [criteriaId], references: [id], onDelete: Cascade)
+  score           Int         // e.g., 1-5
+  comments        String?
+  evaluationDate  DateTime
+  evaluatorId     String?      // Who conducted the evaluation
+  evaluator       User?       @relation("EvaluatorScores", fields: [evaluatorId], references: [id], onDelete: SetNull)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 }
 
 model WorkOutput {
-  id             String   @id @default(cuid())
-  employeeId     String
-  employee       User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  title          String
-  description    String?
-  fileUrl        String?
-  submissionDate DateTime
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  employeeId      String
+  employee        User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  fileUrl         String?
+  submissionDate  DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model AttendanceRecord {
-  id         String   @id @default(cuid())
-  employeeId String
-  employee   User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  date       DateTime
-  status     String // Was AttendanceStatus enum
-  notes      String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  employeeId  String
+  employee    User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date        DateTime // Date of attendance
+  status      String   // AttendanceStatusType: PRESENT, ABSENT, LATE, ON_LEAVE
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model AutoMessageTrigger {
   id                String   @id @default(cuid())
-  eventName         String // Was MessageEventType enum
+  eventName         String   // MessageEventType
   messageTemplate   String
   isActive          Boolean  @default(true)
-  daysBeforeEvent   Int?
+  daysBeforeEvent   Int?     // e.g., 7 days before due date
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Goal {
+  id            String      @id @default(cuid())
+  title         String
+  description   String?
+  status        String      // GoalStatusType: NOT_STARTED, IN_PROGRESS, COMPLETED, ON_HOLD
+  dueDate       DateTime?
+  employeeId    String
+  employee      User        @relation("EmployeeGoals", fields: [employeeId], references: [id], onDelete: Cascade)
+  supervisorId  String?     // Optional: if a supervisor explicitly sets or manages it for an employee
+  supervisor    User?       @relation("SupervisorGoals", fields: [supervisorId], references: [id], onDelete: SetNull)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 }

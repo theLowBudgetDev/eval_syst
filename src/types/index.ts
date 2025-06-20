@@ -18,6 +18,8 @@ export interface AppUser {
   performanceScoresGiven?: PerformanceScore[];
   workOutputs?: WorkOutput[];
   attendanceRecords?: AttendanceRecord[];
+  goalsAsEmployee?: Goal[];
+  goalsAsSupervisor?: Goal[];
 }
 
 export interface EvaluationCriteria {
@@ -86,17 +88,33 @@ export interface AutoMessageTrigger {
   daysBeforeEvent?: number | null;
 }
 
-// Renamed from ChartDataPoint to be more specific for its original use (pie chart)
+export type GoalStatusType = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "ON_HOLD" | "CANCELLED";
+
+export interface Goal {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: GoalStatusType;
+  dueDate?: string | null; // ISO date string
+  employeeId: string;
+  employee?: AppUser; // For including employee details
+  supervisorId?: string | null;
+  supervisor?: AppUser; // For including supervisor details
+  createdAt: string; // ISO date string
+  updatedAt: string; // ISO date string
+}
+
+
 export interface EvaluationDistributionPoint {
-  name: string; // Category name (e.g., "Exceeds Expectations")
-  value: number; // Count of employees/scores in this category
-  fill?: string; // Optional: for direct color control if needed
+  name: string; 
+  value: number; 
+  fill?: string; 
   [key: string]: any;
 }
 
 export interface PerformanceTrendPoint {
-  name: string; // Month name (e.g., "Jan")
-  "Avg Score": number | null; // Average score for that month
+  name: string; 
+  "Avg Score": number | null; 
   [key: string]: any;
 }
 
