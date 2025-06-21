@@ -13,7 +13,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { AppUser } from "@/types";
 import { useRouter } from "next/navigation";
 import { LogIn, Loader2, AlertTriangle, Eye, EyeOff } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -89,26 +88,18 @@ export default function LoginPage() {
 
   if (authIsLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
-        <Card className="w-full max-w-sm shadow-xl">
-          <CardHeader className="text-center">
-            <Skeleton className="h-12 w-12 rounded-full mx-auto mb-4" />
-            <Skeleton className="h-8 w-3/4 mx-auto mb-2" />
-            <Skeleton className="h-4 w-1/2 mx-auto" />
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </CardContent>
-        </Card>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-lg text-muted-foreground">Loading...</p>
       </div>
     );
   }
 
   if (user && !authIsLoading) {
      return (
-        <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
-            <p>Redirecting...</p>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+          <p className="text-lg text-muted-foreground">Redirecting...</p>
         </div>
      );
   }

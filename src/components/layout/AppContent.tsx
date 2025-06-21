@@ -26,11 +26,10 @@ import {
   SheetHeader as ShadSheetHeader,
   SheetTitle as ShadSheetTitle,
 } from '@/components/ui/sheet';
-import { Menu, LogOut } from 'lucide-react';
+import { Menu, LogOut, Loader2 } from 'lucide-react';
 import { getNavLinks, type NavLink as NavLinkType } from '@/lib/navigation';
 import type { UserRoleType, AppUser } from '@/types'; // Import AppUser
 import { DarkModeToggle } from '@/components/shared/DarkModeToggle';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 function RenderNavLinks({ role, onLinkClick }: { role: UserRoleType | null, onLinkClick?: () => void }) {
@@ -218,25 +217,20 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-background">
-        <div className="space-y-4 w-64">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-8 w-3/4" />
-          <Skeleton className="h-8 w-1/2" />
-        </div>
+      <div className="flex flex-col items-center justify-center h-screen bg-background">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-lg text-muted-foreground">Loading Application...</p>
       </div>
     );
   }
 
   if (!user && pathname !== '/login') {
      return (
-      <div className="flex items-center justify-center h-screen bg-background">
-        <div className="space-y-2 text-center">
-          <p className="text-lg font-medium">Redirecting to login...</p>
-          <Skeleton className="h-4 w-32 mx-auto" />
-        </div>
+      <div className="flex flex-col items-center justify-center h-screen bg-background">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-lg text-muted-foreground">Redirecting to login...</p>
       </div>
-    );
+     );
   }
 
   if (pathname === '/login') {
