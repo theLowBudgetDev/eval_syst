@@ -146,7 +146,8 @@ export default function DashboardPage() {
                 previousAverageScore > 0
                   ? ((averageScoreValue - previousAverageScore) / previousAverageScore) * 100
                   : 0;
-              trend = parseFloat(trendValue.toFixed(1));
+              // Round to one decimal place to fix parsing issue
+              trend = Math.round(trendValue * 10) / 10;
             }
 
 
