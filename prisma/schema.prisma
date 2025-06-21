@@ -1,153 +1,128 @@
-
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite" // Or your actual provider, e.g., "postgresql", "mysql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
-// Base model for common fields
-model BaseModel {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("_BaseModel") // Ensure this doesn't conflict if you had a model named _BaseModel
-}
-
-
-// User model
 model User {
-  id                      String    @id @default(cuid())
+  id                      String   @id @default(cuid())
   name                    String
-  email                   String    @unique
-  password                String    // Stores the hashed password
+  email                   String   @unique
+  password                String? // Hashed password
   department              String
   position                String
   hireDate                DateTime
   avatarUrl               String?
-  role                    String    // Was UserRoleType, now String
+  role                    String   // Was UserRoleType enum
   supervisorId            String?
-  supervisor              User?     @relation("EmployeeSupervisor", fields: [supervisorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  supervisedEmployees     User[]    @relation("EmployeeSupervisor")
+  supervisor              User?    @relation("SupervisorEmployee", fields: [supervisorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  supervisedEmployees     User[]   @relation("SupervisorEmployee")
   performanceScoresGiven  PerformanceScore[] @relation("EvaluatorScores")
   performanceScoresReceived PerformanceScore[] @relation("EmployeeScores")
   workOutputs             WorkOutput[]
   attendanceRecords       AttendanceRecord[]
-  goalsAsEmployee         Goal[]    @relation("EmployeeGoals")
-  goalsAsSupervisor       Goal[]    @relation("SupervisorGoals")
-  auditLogs               AuditLog[] // User who performed the action
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
+  goalsAsEmployee         Goal[]   @relation("EmployeeGoals")
+  goalsAsSupervisor       Goal[]   @relation("SupervisorGoals")
+  auditLogs               AuditLog[]
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 }
 
-
-// EvaluationCriteria model
 model EvaluationCriteria {
-  id                  String   @id @default(cuid())
-  name                String   @unique
-  description         String
-  weight              Float? // Optional weight for the criterion
-  performanceScores   PerformanceScore[]
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                String             @id @default(cuid())
+  name              String
+  description       String
+  weight            Float?
+  performanceScores PerformanceScore[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 }
 
-// PerformanceScore model
 model PerformanceScore {
-  id              String    @id @default(cuid())
-  employeeId      String
-  employee        User      @relation("EmployeeScores", fields: [employeeId], references: [id], onDelete: Cascade)
-  criteriaId      String
-  criteria        EvaluationCriteria @relation(fields: [criteriaId], references: [id], onDelete:Restrict)
-  score           Int       // e.g., 1-5
-  comments        String?
-  evaluationDate  DateTime
-  evaluatorId     String?   // Can be null if system generated or self-assessment
-  evaluator       User?     @relation("EvaluatorScores", fields: [evaluatorId], references: [id], onDelete:SetNull)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String             @id @default(cuid())
+  employeeId     String
+  employee       User               @relation("EmployeeScores", fields: [employeeId], references: [id], onDelete: Cascade)
+  criteriaId     String
+  criteria       EvaluationCriteria @relation(fields: [criteriaId], references: [id], onDelete: Restrict)
+  score          Int
+  comments       String?            @db.Text
+  evaluationDate DateTime
+  evaluatorId    String?
+  evaluator      User?              @relation("EvaluatorScores", fields: [evaluatorId], references: [id], onDelete: SetNull)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 }
 
-// WorkOutput model
 model WorkOutput {
-  id              String   @id @default(cuid())
-  employeeId      String
-  employee        User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  title           String
-  description     String?
-  fileUrl         String?  // URL to the stored file
-  submissionDate  DateTime
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  employeeId     String
+  employee       User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?  @db.Text
+  fileUrl        String?
+  submissionDate DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
-// AttendanceRecord model
 model AttendanceRecord {
   id          String   @id @default(cuid())
   employeeId  String
   employee    User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   date        DateTime
-  status      String   // Was AttendanceStatusType, now String
-  notes       String?
+  status      String // Was AttendanceStatusType enum
+  notes       String?  @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
-// AutoMessageTrigger model
 model AutoMessageTrigger {
-  id                String   @id @default(cuid())
-  eventName         String   // Was MessageEventType, now String
-  messageTemplate   String
-  isActive          Boolean  @default(true)
-  daysBeforeEvent   Int?     // e.g., 7 days before review_due
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id              String   @id @default(cuid())
+  eventName       String // Was MessageEventType enum
+  messageTemplate String   @db.Text
+  isActive        Boolean  @default(true)
+  daysBeforeEvent Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
-// Goal model
 model Goal {
-  id            String   @id @default(cuid())
-  title         String
-  description   String?
-  status        String   // Was GoalStatusType, now String
-  dueDate       DateTime?
-  employeeId    String
-  employee      User     @relation("EmployeeGoals", fields: [employeeId], references: [id], onDelete: Cascade)
-  supervisorId  String?
-  supervisor    User?    @relation("SupervisorGoals", fields: [supervisorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  title        String
+  description  String?  @db.Text
+  status       String // Was GoalStatusType enum
+  dueDate      DateTime?
+  employeeId   String
+  employee     User     @relation("EmployeeGoals", fields: [employeeId], references: [id], onDelete: Cascade)
+  supervisorId String?
+  supervisor   User?    @relation("SupervisorGoals", fields: [supervisorId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
-// SystemSetting model
 model SystemSetting {
-  id                    String    @id @default("global_settings") // Ensures only one row for settings
-  appName               String    @default("EvalTrack")
-  systemTheme           String    @default("system") // "light", "dark", "system"
-  maintenanceMode       Boolean   @default(false)
-  notificationsEnabled  Boolean   @default(true)
-  emailNotifications    Boolean   @default(true)
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id                   String   @id @default(cuid())
+  appName              String
+  systemTheme          String   @default("system")
+  maintenanceMode      Boolean  @default(false)
+  notificationsEnabled Boolean  @default(true)
+  emailNotifications   Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
-
-// AuditLog model
 model AuditLog {
-  id          String   @id @default(cuid())
-  timestamp   DateTime @default(now())
-  userId      String?           // Optional: ID of the user who performed the action
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  action      String   // Was AuditActionType, now String. e.g., "USER_LOGIN", "GOAL_CREATED"
-  targetType  String?           // Optional: e.g., "User", "Goal", "EvaluationCriteria"
-  targetId    String?           // Optional: ID of the entity affected
-  details     String?           // Was Json?, now String. Store arbitrary JSON details, stringified.
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
+  id         String   @id @default(cuid())
+  timestamp  DateTime @default(now())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String //
