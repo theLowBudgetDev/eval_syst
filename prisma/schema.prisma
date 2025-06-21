@@ -1,9 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,53 +10,121 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ENUMERATIONS for type safety at the database level
+
+enum UserRoleType {
+  ADMIN
+  SUPERVISOR
+  EMPLOYEE
+}
+
+enum AttendanceStatusType {
+  PRESENT
+  ABSENT
+  LATE
+  ON_LEAVE
+}
+
+enum MessageEventType {
+  DEADLINE_APPROACHING
+  REVIEW_DUE
+  FEEDBACK_REQUEST
+  EVALUATION_COMPLETED
+  NEW_ASSIGNMENT
+}
+
+enum GoalStatusType {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
+  CANCELLED
+}
+
+enum AuditActionType {
+  USER_LOGIN
+  USER_LOGOUT
+  USER_CREATE
+  USER_UPDATE
+  USER_DELETE
+  GOAL_CREATE
+  GOAL_UPDATE
+  GOAL_DELETE
+  EVALUATION_CREATE
+  EVALUATION_UPDATE
+  EVALUATION_DELETE
+  SETTINGS_UPDATE
+  ASSIGNMENT_UPDATE
+  TRIGGER_CREATE
+  TRIGGER_UPDATE
+  TRIGGER_DELETE
+  CRITERIA_CREATE
+  CRITERIA_UPDATE
+  CRITERIA_DELETE
+  ATTENDANCE_CREATE
+  ATTENDANCE_UPDATE
+  ATTENDANCE_DELETE
+  WORK_OUTPUT_CREATE
+  WORK_OUTPUT_UPDATE
+  WORK_OUTPUT_DELETE
+  SYSTEM_STARTUP
+  SYSTEM_SETTINGS_UPDATE
+  AUTH_LOGIN_SUCCESS
+  AUTH_LOGIN_FAILURE
+}
+
+
+// MODELS
+
 model User {
-  id                      String   @id @default(cuid())
+  id                      String        @id @default(cuid())
   name                    String
-  email                   String   @unique
-  password                String? // Hashed password
+  email                   String        @unique
+  password                String?
   department              String
   position                String
   hireDate                DateTime
   avatarUrl               String?
-  role                    String   // Was UserRoleType enum
+  role                    UserRoleType  @default(EMPLOYEE)
+  
   supervisorId            String?
-  supervisor              User?    @relation("SupervisorEmployee", fields: [supervisorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  supervisedEmployees     User[]   @relation("SupervisorEmployee")
-  performanceScoresGiven  PerformanceScore[] @relation("EvaluatorScores")
-  performanceScoresReceived PerformanceScore[] @relation("EmployeeScores")
+  supervisor              User?         @relation("SupervisorEmployee", fields: [supervisorId], references: [id], onDelete: SetNull)
+  supervisedEmployees     User[]        @relation("SupervisorEmployee")
+
+  performanceScoresReceived PerformanceScore[] @relation("ScoresReceived")
+  performanceScoresGiven    PerformanceScore[] @relation("ScoresGiven")
   workOutputs             WorkOutput[]
   attendanceRecords       AttendanceRecord[]
-  goalsAsEmployee         Goal[]   @relation("EmployeeGoals")
-  goalsAsSupervisor       Goal[]   @relation("SupervisorGoals")
+  goalsAsEmployee         Goal[]        @relation("EmployeeGoals")
+  goalsAsSupervisor       Goal[]        @relation("SupervisorGoals")
   auditLogs               AuditLog[]
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+
+  @@index([supervisorId])
 }
 
 model EvaluationCriteria {
-  id                String             @id @default(cuid())
-  name              String
-  description       String
-  weight            Float?
-  performanceScores PerformanceScore[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id                 String             @id @default(cuid())
+  name               String
+  description        String             @db.Text
+  weight             Float?
+  performanceScores  PerformanceScore[]
 }
 
 model PerformanceScore {
-  id             String             @id @default(cuid())
+  id             String      @id @default(cuid())
   employeeId     String
-  employee       User               @relation("EmployeeScores", fields: [employeeId], references: [id], onDelete: Cascade)
+  employee       User        @relation("ScoresReceived", fields: [employeeId], references: [id], onDelete: Cascade)
   criteriaId     String
-  criteria       EvaluationCriteria @relation(fields: [criteriaId], references: [id], onDelete: Restrict)
+  criteria       EvaluationCriteria @relation(fields: [criteriaId], references: [id], onDelete: Cascade)
   score          Int
-  comments       String?            @db.Text
+  comments       String?     @db.Text
   evaluationDate DateTime
   evaluatorId    String?
-  evaluator      User?              @relation("EvaluatorScores", fields: [evaluatorId], references: [id], onDelete: SetNull)
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  evaluator      User?       @relation("ScoresGiven", fields: [evaluatorId], references: [id], onDelete: SetNull)
+
+  @@index([employeeId])
+  @@index([criteriaId])
+  @@index([evaluatorId])
 }
 
 model WorkOutput {
@@ -70,48 +135,49 @@ model WorkOutput {
   description    String?  @db.Text
   fileUrl        String?
   submissionDate DateTime
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+
+  @@index([employeeId])
 }
 
 model AttendanceRecord {
-  id          String   @id @default(cuid())
-  employeeId  String
-  employee    User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  date        DateTime
-  status      String // Was AttendanceStatusType enum
-  notes       String?  @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
+  id         String               @id @default(cuid())
+  employeeId String
+  employee   User                 @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date       DateTime
+  status     AttendanceStatusType
+  notes      String?              @db.Text
 
-model AutoMessageTrigger {
-  id              String   @id @default(cuid())
-  eventName       String // Was MessageEventType enum
-  messageTemplate String   @db.Text
-  isActive        Boolean  @default(true)
-  daysBeforeEvent Int?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  @@index([employeeId])
 }
 
 model Goal {
-  id           String   @id @default(cuid())
+  id           String         @id @default(cuid())
   title        String
-  description  String?  @db.Text
-  status       String // Was GoalStatusType enum
+  description  String?        @db.Text
+  status       GoalStatusType
   dueDate      DateTime?
   employeeId   String
-  employee     User     @relation("EmployeeGoals", fields: [employeeId], references: [id], onDelete: Cascade)
+  employee     User           @relation("EmployeeGoals", fields: [employeeId], references: [id], onDelete: Cascade)
   supervisorId String?
-  supervisor   User?    @relation("SupervisorGoals", fields: [supervisorId], references: [id], onDelete: SetNull)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  supervisor   User?          @relation("SupervisorGoals", fields: [supervisorId], references: [id], onDelete: SetNull)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([employeeId])
+  @@index([supervisorId])
+}
+
+model AutoMessageTrigger {
+  id              String           @id @default(cuid())
+  eventName       MessageEventType
+  messageTemplate String           @db.Text
+  isActive        Boolean          @default(true)
+  daysBeforeEvent Int?
 }
 
 model SystemSetting {
-  id                   String   @id @default(cuid())
-  appName              String
+  id                   String   @id @default("global_settings")
+  appName              String   @default("EvalTrack")
   systemTheme          String   @default("system")
   maintenanceMode      Boolean  @default(false)
   notificationsEnabled Boolean  @default(true)
@@ -121,8 +187,14 @@ model SystemSetting {
 }
 
 model AuditLog {
-  id         String   @id @default(cuid())
-  timestamp  DateTime @default(now())
+  id         String          @id @default(cuid())
+  timestamp  DateTime        @default(now())
   userId     String?
-  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  action     String //
+  user       User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     AuditActionType
+  targetType String?
+  targetId   String?
+  details    Json?
+
+  @@index([userId])
+}
