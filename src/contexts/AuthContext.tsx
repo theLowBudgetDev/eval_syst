@@ -95,7 +95,3 @@ export function useAuth() {
   }
   return context;
 }
-
-// mockAuthUsers is primarily for the seed script now.
-// It's not directly used for login by the client anymore.
-export { mockAuthUsers };
