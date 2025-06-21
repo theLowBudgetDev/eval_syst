@@ -140,12 +140,15 @@ export default function DashboardPage() {
             const averageScore = averageScoreValue ? `${averageScoreValue.toFixed(1)}/5` : "N/A";
 
             let trend = 0;
-            const previousAverageScore = 4.0;
             if (averageScoreValue !== null) {
+              const previousAverageScore = 4.0; // This should be a dynamic value from the previous period
               const trendValue =
-                ((averageScoreValue - previousAverageScore) / previousAverageScore) * 100;
-              trend = Math.round(trendValue * 10) / 10;
+                previousAverageScore > 0
+                  ? ((averageScoreValue - previousAverageScore) / previousAverageScore) * 100
+                  : 0;
+              trend = parseFloat(trendValue.toFixed(1));
             }
+
 
             setMetrics([
               {
@@ -362,7 +365,7 @@ export default function DashboardPage() {
                   </Pie>
                   <ChartLegend
                     content={<ChartLegendContent nameKey="name" />}
-                    className="-translate-y-2 flex justify-between w-full"
+                    className="-translate-y-2 flex flex-wrap justify-center gap-x-6 gap-y-2 md:justify-between w-full"
                   />
                 </PieChart>
               </ChartContainer>

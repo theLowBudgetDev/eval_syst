@@ -20,30 +20,33 @@ export async function GET() {
       return NextResponse.json([]);
     }
 
-    // Aggregate scores by month for the last 6 months
-    const monthlyData: { [month: string]: { totalScore: number; count: number } } = {};
+    // Aggregate scores by month using a unique key 'yyyy-MM'
+    const monthlyData: { [monthKey: string]: { totalScore: number; count: number } } = {};
     const sixMonthsAgo = subMonths(new Date(), 5); // Include current month + 5 past months
 
     scores.forEach(score => {
       const evalDate = score.evaluationDate; // Use the Date object directly from Prisma
       if (evalDate >= sixMonthsAgo) {
-        const monthName = format(evalDate, 'MMM'); // e.g., "Jan", "Feb"
-        if (!monthlyData[monthName]) {
-          monthlyData[monthName] = { totalScore: 0, count: 0 };
+        const monthKey = format(evalDate, 'yyyy-MM'); // e.g., "2024-01"
+        if (!monthlyData[monthKey]) {
+          monthlyData[monthKey] = { totalScore: 0, count: 0 };
         }
-        monthlyData[monthName].totalScore += score.score;
-        monthlyData[monthName].count += 1;
+        monthlyData[monthKey].totalScore += score.score;
+        monthlyData[monthKey].count += 1;
       }
     });
 
+    // Build the final array for the last 6 months in order
     const trendData: PerformanceTrendPoint[] = [];
     for (let i = 5; i >= 0; i--) {
       const date = subMonths(new Date(), i);
+      const monthKey = format(date, 'yyyy-MM');
       const monthName = format(date, 'MMM');
-      if (monthlyData[monthName]) {
+      
+      if (monthlyData[monthKey]) {
         trendData.push({
           name: monthName,
-          avgScore: parseFloat((monthlyData[monthName].totalScore / monthlyData[monthName].count).toFixed(1)),
+          avgScore: parseFloat((monthlyData[monthKey].totalScore / monthlyData[monthKey].count).toFixed(1)),
         });
       } else {
         // Add month with null score if no data, to maintain timeline
@@ -54,11 +57,6 @@ export async function GET() {
       }
     }
     
-    // Ensure we only return up to 6 points if more months had data from previous years due to 'MMM' format.
-    // This simple logic just takes the latest 6 generated points.
-    // A more robust solution would sort by actual date if data spanned years.
-    // For now, since we process month by month for the last 6, it should be okay.
-
     return NextResponse.json(trendData);
 
   } catch (error: any) {
