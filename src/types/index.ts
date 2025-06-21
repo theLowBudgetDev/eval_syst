@@ -117,7 +117,7 @@ export interface EvaluationDistributionPoint {
 
 export interface PerformanceTrendPoint {
   name: string;
-  "Avg Score": number | null;
+  avgScore: number | null;
   [key: string]: any;
 }
 

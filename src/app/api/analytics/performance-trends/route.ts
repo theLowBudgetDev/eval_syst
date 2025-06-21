@@ -43,13 +43,13 @@ export async function GET() {
       if (monthlyData[monthName]) {
         trendData.push({
           name: monthName,
-          'Avg Score': parseFloat((monthlyData[monthName].totalScore / monthlyData[monthName].count).toFixed(1)),
+          avgScore: parseFloat((monthlyData[monthName].totalScore / monthlyData[monthName].count).toFixed(1)),
         });
       } else {
         // Add month with null score if no data, to maintain timeline
         trendData.push({
           name: monthName,
-          'Avg Score': null, // Or 0, depending on how you want to display gaps
+          avgScore: null,
         });
       }
     }

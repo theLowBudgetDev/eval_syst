@@ -5,7 +5,7 @@ import * as React from "react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import type { DashboardMetric, PerformanceScore, AppUser, PerformanceTrendPoint, EvaluationDistributionPoint } from "@/types";
-import { TrendingUp, TrendingDown, Minus, AlertTriangle, Users, ClipboardList, Loader2 } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, AlertTriangle, Users, ClipboardList } from "lucide-react";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Line, LineChart, Pie, PieChart, Cell } from "recharts";
 import { useAuth } from "@/contexts/AuthContext";
@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingIndicator } from "@/components/shared/LoadingIndicator";
 
 const chartConfigPerformance = {
-  "Avg Score": {
+  avgScore: {
     label: "Avg Score",
     color: "hsl(var(--primary))",
   },
@@ -258,7 +258,7 @@ export default function DashboardPage() {
               >
                 <LineChart
                   data={performanceTrendData}
-                  margin={{ left: 0, right: 10, top: 5, bottom: 5 }}
+                  margin={{ top: 5, right: 10, left: -20, bottom: 5 }}
                 >
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
                   <XAxis
@@ -277,9 +277,9 @@ export default function DashboardPage() {
                     content={<ChartTooltipContent hideIndicator />}
                   />
                   <Line
-                    dataKey="Avg Score"
+                    dataKey="avgScore"
                     type="monotone"
-                    stroke="var(--color-Avg Score)"
+                    stroke="var(--color-avgScore)"
                     strokeWidth={2}
                     dot={false}
                   />
@@ -362,7 +362,7 @@ export default function DashboardPage() {
                   </Pie>
                   <ChartLegend
                     content={<ChartLegendContent nameKey="name" />}
-                    className="-translate-y-2 flex-wrap gap-2 [&>*]:basis-1/4 [&>*]:justify-center"
+                    className="-translate-y-2 flex justify-between w-full"
                   />
                 </PieChart>
               </ChartContainer>
@@ -413,7 +413,7 @@ function MetricCard({ metric }: { metric: DashboardMetric }) {
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{metric.title}</CardTitle>
         {metric.value === "N/A" || metric.value === undefined ? (
-          <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
+          <LoadingIndicator text="" />
         ) : (
           <Icon className="h-5 w-5 text-muted-foreground" />
         )}
