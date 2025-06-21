@@ -147,7 +147,7 @@ export default function SupervisorAssignmentsPage() {
       <div className="space-y-6">
         <PageHeader title="Supervisor Assignments" description="Assign and manage supervisors for employees."/>
         <Skeleton className="h-10 w-1/3 mb-4" />
-        <Card className="shadow-lg rounded-lg overflow-hidden">
+        <Card className="shadow-lg rounded-lg">
            <div className="p-4 space-y-2">
             {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
            </div>
@@ -183,7 +183,7 @@ export default function SupervisorAssignmentsPage() {
         />
       </div>
 
-      <Card className="shadow-lg rounded-lg overflow-hidden border-border">
+      <Card className="shadow-lg rounded-lg border-border">
         <Table>
           <TableHeader>
             <TableRow>

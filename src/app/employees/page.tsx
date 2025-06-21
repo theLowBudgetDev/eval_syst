@@ -395,7 +395,7 @@ export default function EmployeesPage() {
         )}
       </div>
 
-      <Card className="shadow-lg rounded-lg overflow-hidden border-border">
+      <Card className="shadow-lg rounded-lg border-border">
         <Table>
           <TableHeader>
             <TableRow>
