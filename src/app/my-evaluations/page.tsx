@@ -94,7 +94,11 @@ export default function MyEvaluationsPage() {
               <TableBody>
                 {myScores.map((score) => (
                   <TableRow key={score.id}>
-                    <TableCell>{format(new Date(score.evaluationDate), "PP")}</TableCell>
+                    <TableCell>
+                      {!isNaN(new Date(score.evaluationDate).getTime())
+                        ? format(new Date(score.evaluationDate), "PP")
+                        : "Invalid Date"}
+                    </TableCell>
                     <TableCell><Badge variant="outline">{getCriteriaName(score)}</Badge></TableCell>
                     <TableCell className="text-center">
                       <Badge variant={score.score >= 4 ? "default" : score.score === 3 ? "secondary" : "destructive"}>
@@ -103,7 +107,7 @@ export default function MyEvaluationsPage() {
                     </TableCell>
                     <TableCell>{getEvaluatorName(score)}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="outline" size="icon" onClick={() => toast({title: "Details", description: score.comments || "No comments provided."})}>
+                      <Button variant="outline" size="icon" onClick={() => router.push(`/my-evaluations/${score.id}`)}>
                         <Eye className="h-4 w-4" />
                         <span className="sr-only">View Details</span>
                       </Button>

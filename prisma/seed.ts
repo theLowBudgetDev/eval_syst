@@ -5,7 +5,7 @@ import { mockAuthUsers as originalMockAuthUsersConfig } from '../src/contexts/Au
 import {
   mockEvaluationCriteria,
   mockPerformanceScores as originalMockPerformanceScores,
-  mockWorkOutputs as originalMockWorkOutputs,
+  mockWorkOutputs,
   mockAttendanceRecords as originalMockAttendanceRecords,
   mockAutoMessageTriggers,
 } from '../src/lib/mockData';
@@ -119,64 +119,79 @@ async function main() {
   }
   console.log('Seeded evaluation criteria.');
 
-  for (const score of originalMockPerformanceScores) {
-    const employeeDbId = createdUsersMap[score.employeeId];
-    const criteriaDbId = createdCriteria[score.criteriaId];
-    const evaluatorDbId = score.evaluatorId ? createdUsersMap[score.evaluatorId] : null;
+  // Programmatically create performance scores
+  const allEmployeeUsers = mockAuthUsersWithPasswords.filter(u => u.role === 'EMPLOYEE');
+  const allSupervisorUsers = mockAuthUsersWithPasswords.filter(u => u.role === 'SUPERVISOR');
+  const criteriaIds = Object.values(createdCriteria);
 
-    if (employeeDbId && criteriaDbId && (evaluatorDbId || !score.evaluatorId)) {
+  for (const employee of allEmployeeUsers) {
+    const employeeDbId = createdUsersMap[employee.id];
+    if (!employeeDbId) continue;
+
+    // Create a few performance scores for each employee across different criteria
+    for (let i = 0; i < Math.min(criteriaIds.length, 5); i++) { // Create up to 5 scores per employee
+      const criteriaDbId = criteriaIds[i];
+      const scoreValue = Math.floor(Math.random() * 5) + 1; // Random score between 1 and 5
+      // Generate evaluation dates within the last year, spaced out
+      const evaluationDate = new Date(Date.now() - (i * 60 + Math.random() * 30) * 24 * 60 * 60 * 1000);
+      const evaluator = allSupervisorUsers[Math.floor(Math.random() * allSupervisorUsers.length)];
+      const evaluatorDbId = evaluator ? createdUsersMap[evaluator.id] : null;
+
       await prisma.performanceScore.create({
         data: {
           employeeId: employeeDbId,
           criteriaId: criteriaDbId,
-          score: score.score,
-          comments: score.comments,
-          evaluationDate: new Date(score.evaluationDate),
+          score: scoreValue,
+          comments: `Evaluation score for ${employee.name} on ${mockEvaluationCriteria.find(c => createdCriteria[c.id] === criteriaDbId)?.name || 'a criteria'}.`,
+          evaluationDate: evaluationDate,
           evaluatorId: evaluatorDbId,
         },
       });
-    } else {
-      console.warn(`Skipping performance score due to missing DB ID: emp-${!!employeeDbId}, crit-${!!criteriaDbId}, eval-${!!evaluatorDbId || !score.evaluatorId} for mock score ID ${score.id || 'N/A'}`);
     }
   }
   console.log('Seeded performance scores.');
 
-  for (const output of originalMockWorkOutputs) {
-    const employeeDbId = createdUsersMap[output.employeeId];
+  // Programmatically create work outputs
+  for (const employee of allEmployeeUsers) {
+    const employeeDbId = createdUsersMap[employee.id];
     if (employeeDbId) {
+      // Create a couple of work outputs for each employee
+      for (let i = 0; i < 3; i++) { // Create 3 records per employee
       await prisma.workOutput.create({
         data: {
           employeeId: employeeDbId,
-          title: output.title,
-          description: output.description,
-          fileUrl: output.fileUrl,
-          submissionDate: new Date(output.submissionDate),
+          title: `Report ${i + 1} for Month ${Math.floor(Math.random() * 12) + 1}`,
+          description: `Performance report ${i + 1} submitted by ${employee.name}.`,
+          fileUrl: `https://example.com/reports/${employee.id}/${Date.now()}-${i}.pdf`,
+          submissionDate: new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000), // Within the last 90 days
         },
       });
+    }
     } else {
-         console.warn(`Skipping work output for mock employeeId ${output.employeeId} as user DB ID not found.`);
+         console.warn(`Skipping work output for mock employeeId ${employee.id} as user DB ID not found.`);
     }
   }
   console.log('Seeded work outputs.');
 
-  for (const record of originalMockAttendanceRecords) {
-     const employeeDbId = createdUsersMap[record.employeeId];
+  // Programmatically create attendance records
+  const attendanceStatuses: AttendanceStatusType[] = ["PRESENT", "ABSENT", "LATE", "ON_LEAVE"];
+  for (const employee of allEmployeeUsers) {
+    const employeeDbId = createdUsersMap[employee.id];
      if (employeeDbId) {
-        const prismaStatus: AttendanceStatusType = record.status as AttendanceStatusType;
-        if (!["PRESENT", "ABSENT", "LATE", "ON_LEAVE"].includes(prismaStatus)) {
-             console.warn(`Unknown attendance status: ${record.status}. Skipping record.`);
-            continue;
-        }
-        await prisma.attendanceRecord.create({
-            data: {
+       // Create more attendance records spanning several months
+       const numberOfAttendanceRecords = 60; // Create 60 records per employee
+       for (let i = 0; i < numberOfAttendanceRecords; i++) {
+           const attendanceDate = new Date(Date.now() - (i + 1) * 5 * 24 * 60 * 60 * 1000); // One record every 5 days for a longer period
+           const prismaStatus: AttendanceStatusType = attendanceStatuses[Math.floor(Math.random() * attendanceStatuses.length)];
+           await prisma.attendanceRecord.create({
+             data: {
             employeeId: employeeDbId,
-            date: new Date(record.date),
+            date: attendanceDate,
             status: prismaStatus,
-            notes: record.notes,
-            },
-        });
-     } else {
-         console.warn(`Skipping attendance record for mock employeeId ${record.employeeId} as user DB ID not found.`);
+            notes: `Attendance record for ${employee.name} on ${attendanceDate.toDateString()}` + (prismaStatus === 'LATE' ? ' (Arrived after start time)' : ''),
+             },
+           });
+        }
      }
   }
   console.log('Seeded attendance records.');

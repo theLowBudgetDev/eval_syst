@@ -106,7 +106,7 @@ export async function PUT(request: Request) {
                 action: "SYSTEM_SETTINGS_UPDATE" as AuditActionType,
                 targetType: "SystemSetting",
                 targetId: GLOBAL_SETTINGS_ID,
-                details: changesMade,
+                details: JSON.stringify(changesMade),
             },
         });
     }

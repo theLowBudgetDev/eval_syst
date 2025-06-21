@@ -25,7 +25,7 @@ export async function GET() {
     const sixMonthsAgo = subMonths(new Date(), 5); // Include current month + 5 past months
 
     scores.forEach(score => {
-      const evalDate = parseISO(score.evaluationDate); // Ensure date is parsed correctly
+      const evalDate = score.evaluationDate; // Use the Date object directly from Prisma
       if (evalDate >= sixMonthsAgo) {
         const monthName = format(evalDate, 'MMM'); // e.g., "Jan", "Feb"
         if (!monthlyData[monthName]) {

@@ -87,9 +87,19 @@ export default function AdminSettingsPage() {
         const errorBody = await res.json().catch(() => ({ message: "Failed to save settings" }));
         throw new Error(errorBody.message);
       }
-      const updatedSettings: SystemSetting = await res.json();
-      const { id, createdAt, updatedAt, ...rest } = updatedSettings;
+      
+      // Explicitly re-fetch settings after successful save to ensure latest data
+      const refetchRes = await fetch('/api/admin/settings', { headers });
+      if (!refetchRes.ok) {
+          const errorBody = await refetchRes.json().catch(() => ({ message: "Failed to re-fetch settings after save" }));
+          throw new Error(errorBody.message);
+      }
+      const latestSettings: SystemSetting = await refetchRes.json();
+
+      // Update state with the latest data
+      const { id, createdAt, updatedAt, ...rest } = latestSettings;
       setSettings(rest);
+      
       toast({
           title: "Settings Saved",
           description: "Your changes to the system settings have been successfully saved.",
