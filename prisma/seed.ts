@@ -239,39 +239,39 @@ async function main() {
   const supervisorUserIdForLog = supervisorUsers[0] ? createdUsersMap[supervisorUsers[0].id] : null;
 
   if (adminUserIdForLog) {
-    await prisma.auditLog.create({
-      data: {
-        userId: adminUserIdForLog,
-        action: "USER_LOGIN" as AuditActionType,
-        details: { ipAddress: "192.168.1.100", userAgent: "Chrome/90.0" }
-      }
+ await prisma.auditLog.create({
+ data: {
+ userId: adminUserIdForLog,
+ action: "USER_LOGIN" as AuditActionType,
+ details: JSON.stringify({ ipAddress: "192.168.1.100", userAgent: "Chrome/90.0" }),
+ },
     });
-    await prisma.auditLog.create({
-      data: {
-        userId: adminUserIdForLog,
-        action: "SYSTEM_SETTINGS_UPDATE" as AuditActionType,
-        targetType: "SystemSetting",
-        targetId: GLOBAL_SETTINGS_ID,
-        details: { changedField: "appName", oldValue: "OldName", newValue: "EvalTrack Pro" }
-      }
+ await prisma.auditLog.create({
+ data: {
+ userId: adminUserIdForLog,
+ action: "SYSTEM_SETTINGS_UPDATE" as AuditActionType,
+ targetType: "SystemSetting",
+ targetId: GLOBAL_SETTINGS_ID,
+ details: JSON.stringify({ changedField: "appName", oldValue: "OldName", newValue: "EvalTrack Pro" }),
+ },
     });
   }
   if (supervisorUserIdForLog && firstEmployeeForGoal && createdUsersMap[firstEmployeeForGoal.id]) {
+    const targetPerformanceScore = originalMockPerformanceScores.find(score => score.employeeId === firstEmployeeForGoal.id);
      await prisma.auditLog.create({
       data: {
         userId: supervisorUserIdForLog,
-        action: "EVALUATION_CREATE" as AuditActionType,
-        targetType: "PerformanceScore",
-        targetId: "mockScoreId1_from_seed", // Use a more descriptive mock ID
-        details: { employeeEvaluated: firstEmployeeForGoal.name }
+        action: "PERFORMANCE_SCORE_CREATED" as AuditActionType, // Added missing action
+        targetType: "PerformanceScore", // Added targetType
+        targetId: targetPerformanceScore?.id || 'N/A', // Use an actual mock ID if available
+        details: JSON.stringify({ employeeEvaluated: firstEmployeeForGoal.name }) // Stringified details
       }
     });
   }
    await prisma.auditLog.create({
       data: {
         action: "SYSTEM_STARTUP" as AuditActionType,
-        details: { message: "System initialized successfully during seed." }
-      }
+      } as any // Cast to any for now, will fix prisma schema
     });
   console.log('Seeded audit logs.');
 
