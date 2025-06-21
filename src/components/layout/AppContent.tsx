@@ -26,11 +26,12 @@ import {
   SheetHeader as ShadSheetHeader,
   SheetTitle as ShadSheetTitle,
 } from '@/components/ui/sheet';
-import { Menu, LogOut, Loader2 } from 'lucide-react';
+import { Menu, LogOut } from 'lucide-react';
 import { getNavLinks, type NavLink as NavLinkType } from '@/lib/navigation';
 import type { UserRoleType, AppUser } from '@/types'; // Import AppUser
 import { DarkModeToggle } from '@/components/shared/DarkModeToggle';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { LoadingIndicator } from '@/components/shared/LoadingIndicator';
 
 function RenderNavLinks({ role, onLinkClick }: { role: UserRoleType | null, onLinkClick?: () => void }) {
   const navLinks = getNavLinks(role);
@@ -218,8 +219,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-background">
-        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-        <p className="text-lg text-muted-foreground">Loading Application...</p>
+        <LoadingIndicator text="Loading Application..." />
       </div>
     );
   }
@@ -227,8 +227,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   if (!user && pathname !== '/login') {
      return (
       <div className="flex flex-col items-center justify-center h-screen bg-background">
-        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-        <p className="text-lg text-muted-foreground">Redirecting to login...</p>
+        <LoadingIndicator text="Redirecting to login..." />
       </div>
      );
   }

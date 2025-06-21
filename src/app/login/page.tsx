@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { LogIn, Loader2, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { LoadingIndicator } from "@/components/shared/LoadingIndicator";
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Invalid email address" }),
@@ -89,8 +90,7 @@ export default function LoginPage() {
   if (authIsLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
-        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-        <p className="text-lg text-muted-foreground">Loading...</p>
+        <LoadingIndicator text="Loading..." />
       </div>
     );
   }
@@ -98,8 +98,7 @@ export default function LoginPage() {
   if (user && !authIsLoading) {
      return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-          <p className="text-lg text-muted-foreground">Redirecting...</p>
+          <LoadingIndicator text="Redirecting..." />
         </div>
      );
   }

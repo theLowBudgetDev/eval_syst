@@ -14,7 +14,7 @@ body {
     --card-foreground: 220 30% 15%;
     --popover: 220 20% 100%;
     --popover-foreground: 220 30% 15%;
-    --primary: 220 50% 45%;
+    --primary: 220 80% 25%;
     --primary-foreground: 0 0% 100%;
     --secondary: 220 40% 94%;
     --secondary-foreground: 220 40% 20%;
@@ -26,22 +26,22 @@ body {
     --destructive-foreground: 0 0% 98%;
     --border: 220 20% 90%;
     --input: 220 20% 95%;
-    --ring: 220 50% 45%;
-    --chart-1: 220 50% 45%;
-    --chart-2: 220 45% 55%;
-    --chart-3: 220 40% 65%;
-    --chart-4: 210 50% 50%;
-    --chart-5: 230 50% 50%;
+    --ring: 220 80% 30%;
+    --chart-1: 220 80% 30%;
+    --chart-2: 220 70% 45%;
+    --chart-3: 220 60% 60%;
+    --chart-4: 210, 80%, 40%;
+    --chart-5: 230, 80%, 40%;
     --radius: 0.5rem;
 
     /* Sidebar variables for light theme */
     --sidebar-background: 220 20% 96%;
     --sidebar-foreground: 220 30% 20%;
     --sidebar-border: 220 20% 88%;
-    --sidebar-ring: 220 50% 45%;
+    --sidebar-ring: 220 80% 30%;
     --sidebar-accent: 220 40% 92%;
     --sidebar-accent-foreground: 220 40% 25%;
-    --sidebar-primary: 220 50% 45%;
+    --sidebar-primary: 220 80% 25%;
     --sidebar-primary-foreground: 0 0% 100%;
   }
 
@@ -52,7 +52,7 @@ body {
     --card-foreground: 220 20% 92%;
     --popover: 220 15% 12%;
     --popover-foreground: 220 20% 92%;
-    --primary: 220 60% 65%;
+    --primary: 220 70% 70%;
     --primary-foreground: 220 20% 10%;
     --secondary: 220 15% 25%;
     --secondary-foreground: 220 20% 90%;
@@ -64,21 +64,21 @@ body {
     --destructive-foreground: 0 0% 98%;
     --border: 220 15% 25%;
     --input: 220 15% 20%;
-    --ring: 220 60% 65%;
-    --chart-1: 220 60% 65%;
-    --chart-2: 220 55% 75%;
-    --chart-3: 220 50% 85%;
-    --chart-4: 210 60% 70%;
-    --chart-5: 230 60% 70%;
+    --ring: 220 70% 70%;
+    --chart-1: 220 70% 70%;
+    --chart-2: 220, 65%, 80%;
+    --chart-3: 220, 60%, 90%;
+    --chart-4: 210, 70%, 75%;
+    --chart-5: 230, 70%, 75%;
 
     /* Sidebar variables for dark theme */
     --sidebar-background: 220 15% 12%;
     --sidebar-foreground: 220 20% 88%;
     --sidebar-border: 220 15% 22%;
-    --sidebar-ring: 220 60% 65%;
+    --sidebar-ring: 220 70% 70%;
     --sidebar-accent: 220 15% 28%;
     --sidebar-accent-foreground: 220 20% 92%;
-    --sidebar-primary: 220 60% 65%;
+    --sidebar-primary: 220 70% 70%;
     --sidebar-primary-foreground: 220 20% 10%;
   }
 }
@@ -91,5 +91,22 @@ body {
     @apply bg-background text-foreground;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  @keyframes bounce-opacity {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.6;
+      transform: scale(0.98);
+    }
+  }
+
+  .animate-bounce-opacity {
+    animation: bounce-opacity 2s infinite ease-in-out;
   }
 }
