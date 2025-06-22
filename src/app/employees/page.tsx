@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { PlusCircle, Edit, Trash2, Search, Filter, MoreHorizontal, Eye, Loader2, ArrowUpDown } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/PageHeader";
 import {
   Table,
@@ -21,6 +21,16 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -74,8 +84,10 @@ export default function EmployeesPage() {
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editingEmployee, setEditingEmployee] = React.useState<AppUser | null>(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = React.useState<Set<string>>(new Set());
+  
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [employeeToDelete, setEmployeeToDelete] = React.useState<AppUser | null>(null);
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [isSubmittingForm, setIsSubmittingForm] = React.useState(false);
 
@@ -326,6 +338,7 @@ export default function EmployeesPage() {
         }
     }
     setIsDeleting(false);
+    setShowBatchDeleteConfirm(false);
 
     if (deletedCount > 0) {
        toast({ title: "Employees Deleted", description: `${deletedCount} employee(s) removed. ${errorMessages.length > 0 ? `Errors on ${errorMessages.length} items.` : ''}` });
@@ -407,8 +420,8 @@ export default function EmployeesPage() {
             </SelectContent>
         </Select>
         {canPerformAdminActions && selectedEmployeeIds.size > 0 && (
-           <Button variant="destructive" onClick={handleDeleteSelected} disabled={isDeleting || isLoadingData} className="w-full sm:w-auto md:col-start-4">
-             {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+           <Button variant="destructive" onClick={() => setShowBatchDeleteConfirm(true)} disabled={isDeleting || isLoadingData} className="w-full sm:w-auto md:col-start-4">
+             <Trash2 className="mr-2 h-4 w-4" />
              Delete ({selectedEmployeeIds.size})
            </Button>
         )}
@@ -552,28 +565,44 @@ export default function EmployeesPage() {
         />
       )}
 
-      {showDeleteConfirm && canPerformAdminActions && employeeToDelete && (
-        <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Confirm Deletion</DialogTitle>
-              <DialogDescription>
-                Are you sure you want to delete employee: <strong>{employeeToDelete?.name}</strong>? This action cannot be undone and may affect related records.
-                 {employeeToDelete.role === 'SUPERVISOR' && employeeToDelete.supervisedEmployees && employeeToDelete.supervisedEmployees.length > 0 &&
-                    <span className="block mt-2 text-destructive/90">This user supervises {employeeToDelete.supervisedEmployees.length} employee(s). Please reassign them first.</span>
-                 }
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} disabled={isDeleting}>Cancel</Button>
-              <Button variant="destructive" onClick={confirmDelete} disabled={isDeleting}>
-                {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Delete
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete employee: <strong>{employeeToDelete?.name}</strong>? This action cannot be undone.
+              {employeeToDelete?.role === 'SUPERVISOR' && employeeToDelete.supervisedEmployees && employeeToDelete.supervisedEmployees.length > 0 &&
+                  <span className="block mt-2 text-destructive/90">This user supervises {employeeToDelete.supervisedEmployees.length} employee(s). Please reassign them first.</span>
+              }
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className={buttonVariants({ variant: "destructive" })} disabled={isDeleting}>
+              {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showBatchDeleteConfirm} onOpenChange={setShowBatchDeleteConfirm}>
+          <AlertDialogContent>
+              <AlertDialogHeader>
+                  <AlertDialogTitle>Confirm Batch Deletion</AlertDialogTitle>
+                  <AlertDialogDescription>
+                      Are you sure you want to delete the selected <strong>{selectedEmployeeIds.size}</strong> employee(s)? This action cannot be undone.
+                  </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteSelected} className={buttonVariants({ variant: "destructive" })} disabled={isDeleting}>
+                      {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Delete Selected
+                  </AlertDialogAction>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
 
       {viewingEmployee && (
         <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
