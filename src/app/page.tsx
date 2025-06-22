@@ -73,54 +73,17 @@ export default function DashboardPage() {
           fetch("/api/analytics/evaluation-distribution"),
         ])
           .then(async ([usersRes, scoresRes, trendsRes, distributionRes]) => {
-            if (!usersRes.ok) {
-              const errorBody = await usersRes.json().catch(() => ({
-                message: `Failed to fetch users (status ${usersRes.status}, non-JSON response)`,
-              }));
-              throw new Error(
-                errorBody.error ||
-                  errorBody.message ||
-                  `Failed to fetch users (status ${usersRes.status})`
-              );
+            if (!usersRes.ok || !scoresRes.ok || !trendsRes.ok || !distributionRes.ok) {
+              // A simple catch-all for any failed fetch
+              throw new Error("Failed to fetch all necessary dashboard data.");
             }
+
             const usersData: AppUser[] = await usersRes.json();
-
-            if (!scoresRes.ok) {
-              const errorBody = await scoresRes.json().catch(() => ({
-                message: `Failed to fetch scores (status ${scoresRes.status}, non-JSON response)`,
-              }));
-              throw new Error(
-                errorBody.error ||
-                  errorBody.message ||
-                  `Failed to fetch scores (status ${scoresRes.status})`
-              );
-            }
             const scoresData: PerformanceScore[] = await scoresRes.json();
-
-            if (!trendsRes.ok) {
-              const errorBody = await trendsRes.json().catch(() => ({
-                message: `Failed to fetch performance trends (status ${trendsRes.status}, non-JSON response)`,
-              }));
-              throw new Error(
-                errorBody.error ||
-                  errorBody.message ||
-                  `Failed to fetch trends (status ${trendsRes.status})`
-              );
-            }
-            setPerformanceTrendData(await trendsRes.json());
-
-            if (!distributionRes.ok) {
-              const errorBody = await distributionRes.json().catch(() => ({
-                message: `Failed to fetch evaluation distribution (status ${distributionRes.status}, non-JSON response)`,
-              }));
-              throw new Error(
-                errorBody.error ||
-                  errorBody.message ||
-                  `Failed to fetch distribution (status ${distributionRes.status})`
-              );
-            }
+            const trendPointsData: PerformanceTrendPoint[] = await trendsRes.json();
+            setPerformanceTrendData(trendPointsData);
             setEvaluationDistributionData(await distributionRes.json());
-
+            
             const totalEmployees = usersData.length;
             const pendingEvaluations = usersData.filter(
               (u) =>
@@ -138,18 +101,18 @@ export default function DashboardPage() {
                 ? scoresData.reduce((acc, curr) => acc + curr.score, 0) / scoresData.length
                 : null;
             const averageScore = averageScoreValue ? `${averageScoreValue.toFixed(1)}/5` : "N/A";
-
+            
+            // Dynamic trend calculation based on fetched chart data
             let trend = 0;
-            if (averageScoreValue !== null) {
-              const previousAverageScore = 4.0; // This should be a dynamic value from the previous period
-              const trendValue =
-                previousAverageScore > 0
-                  ? ((averageScoreValue - previousAverageScore) / previousAverageScore) * 100
-                  : 0;
-              // Round to one decimal place to fix parsing issue
-              trend = Math.round(trendValue * 10) / 10;
+            const validTrendPoints = trendPointsData.filter(p => p.avgScore !== null);
+            if (validTrendPoints.length >= 2) {
+                const latestScore = validTrendPoints[validTrendPoints.length - 1].avgScore!;
+                const oldestScore = validTrendPoints[0].avgScore!;
+                if (oldestScore > 0) {
+                    trend = ((latestScore - oldestScore) / oldestScore) * 100;
+                }
             }
-
+            const finalTrend = parseFloat(trend.toFixed(1));
 
             setMetrics([
               {
@@ -170,8 +133,8 @@ export default function DashboardPage() {
                 title: "Overall Performance",
                 value: averageScore,
                 icon: TrendingUp,
-                trend: trend,
-                description: "Avg score vs. last cycle",
+                trend: finalTrend,
+                description: "vs. start of period",
               },
               {
                 title: "Attendance Issues",
@@ -286,6 +249,7 @@ export default function DashboardPage() {
                     stroke="var(--color-avgScore)"
                     strokeWidth={2}
                     dot={false}
+                    connectNulls
                   />
                 </LineChart>
               </ChartContainer>

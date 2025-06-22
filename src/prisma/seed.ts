@@ -10,6 +10,7 @@ import {
   mockAutoMessageTriggers,
 } from '../src/lib/mockData';
 import bcrypt from 'bcrypt';
+import { format } from 'date-fns';
 
 const prisma = new PrismaClient();
 const GLOBAL_SETTINGS_ID = "global_settings";
@@ -119,67 +120,85 @@ async function main() {
   }
   console.log('Seeded evaluation criteria.');
 
-  for (const score of originalMockPerformanceScores) {
-    const employeeDbId = createdUsersMap[score.employeeId];
-    const criteriaDbId = createdCriteria[score.criteriaId];
-    const evaluatorDbId = score.evaluatorId ? createdUsersMap[score.evaluatorId] : null;
+  // Create deterministic performance scores to show a trend
+  const allEmployeeUsersWithMockData = mockAuthUsersWithPasswords.filter(u => u.role === 'EMPLOYEE');
+  const allSupervisorUsersWithMockData = mockAuthUsersWithPasswords.filter(u => u.role === 'SUPERVISOR');
+  const criteriaIds = Object.values(createdCriteria);
+  const now = new Date();
 
-    if (employeeDbId && criteriaDbId && (evaluatorDbId || !score.evaluatorId)) {
-      await prisma.performanceScore.create({
-        data: {
-          employeeId: employeeDbId,
-          criteriaId: criteriaDbId,
-          score: score.score,
-          comments: score.comments,
-          evaluationDate: new Date(score.evaluationDate),
-          evaluatorId: evaluatorDbId,
-        },
-      });
-    } else {
-      console.warn(`Skipping performance score due to missing DB ID: emp-${!!employeeDbId}, crit-${!!criteriaDbId}, eval-${!!evaluatorDbId || !score.evaluatorId} for mock score ID ${score.id || 'N/A'}`);
-    }
+  for (const employee of allEmployeeUsersWithMockData) {
+      const employeeDbId = createdUsersMap[employee.id];
+      if (!employeeDbId) continue;
+
+      const evaluator = allSupervisorUsersWithMockData.find(s => s.id === employee.supervisorId) || allSupervisorUsersWithMockData[0];
+      const evaluatorDbId = evaluator ? createdUsersMap[evaluator.id] : null;
+
+      // Create a predictable trend of scores over the last 6 months
+      for (let i = 0; i < 6; i++) {
+          const evaluationDate = new Date(now.getFullYear(), now.getMonth() - i, 15);
+          // Give Employee Eve an improving score, others a stable score
+          const scoreValue = employee.id === 'emp01' ? Math.min(5, 3 + Math.floor((5-i)/2)) : (i % 3) + 3;
+
+          if (criteriaIds[i % criteriaIds.length]) {
+              await prisma.performanceScore.create({
+                  data: {
+                      employeeId: employeeDbId,
+                      criteriaId: criteriaIds[i % criteriaIds.length],
+                      score: scoreValue,
+                      comments: `Evaluation for ${format(evaluationDate, 'MMMM yyyy')}.`,
+                      evaluationDate: evaluationDate,
+                      evaluatorId: evaluatorDbId,
+                  },
+              });
+          }
+      }
   }
-  console.log('Seeded performance scores.');
+  console.log('Seeded deterministic performance scores.');
 
-  for (const output of originalMockWorkOutputs) {
-    const employeeDbId = createdUsersMap[output.employeeId];
+  // Create deterministic work outputs
+  for (const employee of allEmployeeUsersWithMockData) {
+    const employeeDbId = createdUsersMap[employee.id];
     if (employeeDbId) {
-      await prisma.workOutput.create({
-        data: {
-          employeeId: employeeDbId,
-          title: output.title,
-          description: output.description,
-          fileUrl: output.fileUrl,
-          submissionDate: new Date(output.submissionDate),
-        },
-      });
-    } else {
-         console.warn(`Skipping work output for mock employeeId ${output.employeeId} as user DB ID not found.`);
+        for (let i = 1; i <= 2; i++) {
+            const submissionDate = new Date(now.getFullYear(), now.getMonth() - i, 20);
+            await prisma.workOutput.create({
+                data: {
+                    employeeId: employeeDbId,
+                    title: `Project ${String.fromCharCode(65 + i)} Submission for ${employee.name}`,
+                    description: `Monthly progress report submitted on ${format(submissionDate, 'PP')}.`,
+                    fileUrl: `https://example.com/reports/${employee.id}/${submissionDate.getTime()}.pdf`,
+                    submissionDate: submissionDate,
+                },
+            });
+        }
     }
   }
-  console.log('Seeded work outputs.');
+  console.log('Seeded deterministic work outputs.');
+  
+  // Create deterministic attendance records
+  const attendanceStatuses: AttendanceStatusType[] = ["PRESENT", "LATE", "PRESENT", "PRESENT", "ABSENT"]; // Skew towards present
+  for (const employee of allEmployeeUsersWithMockData) {
+      const employeeDbId = createdUsersMap[employee.id];
+      if (employeeDbId) {
+          const numberOfAttendanceRecords = 60; // Approx 3 months of weekdays
+          for (let i = 0; i < numberOfAttendanceRecords; i++) {
+              const attendanceDate = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+              // Skip weekends to be more realistic
+              if (attendanceDate.getDay() === 0 || attendanceDate.getDay() === 6) continue;
 
-  for (const record of originalMockAttendanceRecords) {
-     const employeeDbId = createdUsersMap[record.employeeId];
-     if (employeeDbId) {
-        const prismaStatus: AttendanceStatusType = record.status as AttendanceStatusType;
-        if (!["PRESENT", "ABSENT", "LATE", "ON_LEAVE"].includes(prismaStatus)) {
-             console.warn(`Unknown attendance status: ${record.status}. Skipping record.`);
-            continue;
-        }
-        await prisma.attendanceRecord.create({
-            data: {
-            employeeId: employeeDbId,
-            date: new Date(record.date),
-            status: prismaStatus,
-            notes: record.notes,
-            },
-        });
-     } else {
-         console.warn(`Skipping attendance record for mock employeeId ${record.employeeId} as user DB ID not found.`);
-     }
+              const status = attendanceStatuses[i % attendanceStatuses.length];
+              await prisma.attendanceRecord.create({
+                  data: {
+                      employeeId: employeeDbId,
+                      date: attendanceDate,
+                      status: status,
+                      notes: status !== 'PRESENT' ? `${status} on ${format(attendanceDate, 'PP')}` : '',
+                  },
+              });
+          }
+      }
   }
-  console.log('Seeded attendance records.');
+  console.log('Seeded deterministic attendance records.');
 
   for (const trigger of mockAutoMessageTriggers) {
     const prismaEventName: MessageEventType = trigger.eventName as MessageEventType;
@@ -239,31 +258,32 @@ async function main() {
   const supervisorUserIdForLog = supervisorUsers[0] ? createdUsersMap[supervisorUsers[0].id] : null;
 
   if (adminUserIdForLog) {
-    await prisma.auditLog.create({
-      data: {
-        userId: adminUserIdForLog,
-        action: "USER_LOGIN" as AuditActionType,
-        details: JSON.stringify({ ipAddress: "192.168.1.100", userAgent: "Chrome/90.0" })
-      }
+ await prisma.auditLog.create({
+ data: {
+ userId: adminUserIdForLog,
+ action: "USER_LOGIN" as AuditActionType,
+ details: JSON.stringify({ ipAddress: "192.168.1.100", userAgent: "Chrome/90.0" }),
+ },
     });
-    await prisma.auditLog.create({
-      data: {
-        userId: adminUserIdForLog,
-        action: "SYSTEM_SETTINGS_UPDATE" as AuditActionType,
-        targetType: "SystemSetting",
-        targetId: GLOBAL_SETTINGS_ID,
-        details: JSON.stringify({ changedField: "appName", oldValue: "OldName", newValue: "EvalTrack Pro" })
-      }
+ await prisma.auditLog.create({
+ data: {
+ userId: adminUserIdForLog,
+ action: "SYSTEM_SETTINGS_UPDATE" as AuditActionType,
+ targetType: "SystemSetting",
+ targetId: GLOBAL_SETTINGS_ID,
+ details: JSON.stringify({ changedField: "appName", oldValue: "OldName", newValue: "EvalTrack Pro" }),
+ },
     });
   }
   if (supervisorUserIdForLog && firstEmployeeForGoal && createdUsersMap[firstEmployeeForGoal.id]) {
+    const targetPerformanceScore = originalMockPerformanceScores.find(score => score.employeeId === firstEmployeeForGoal.id);
      await prisma.auditLog.create({
       data: {
         userId: supervisorUserIdForLog,
-        action: "EVALUATION_CREATE" as AuditActionType,
-        targetType: "PerformanceScore",
-        targetId: "mockScoreId1_from_seed", // Use a more descriptive mock ID
-        details: JSON.stringify({ employeeEvaluated: firstEmployeeForGoal.name })
+        action: "PERFORMANCE_SCORE_CREATED" as AuditActionType, // Added missing action
+        targetType: "PerformanceScore", // Added targetType
+        targetId: targetPerformanceScore?.id || 'N/A', // Use an actual mock ID if available
+        details: JSON.stringify({ employeeEvaluated: firstEmployeeForGoal.name }) // Stringified details
       }
     });
   }
