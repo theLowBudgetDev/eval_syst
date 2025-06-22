@@ -1,26 +1,152 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
 
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
+model User {
+  id                        String    @id @default(cuid())
+  name                      String
+  email                     String    @unique
+  password                  String
+  department                String
+  position                  String
+  hireDate                  DateTime
+  avatarUrl                 String?
+  role                      UserRoleType
+  supervisorId              String?
+  supervisor                User?     @relation("SupervisedBy", fields: [supervisorId], references: [id], onDelete: SetNull)
+  supervisedEmployees       User[]    @relation("SupervisedBy")
+  performanceScoresReceived PerformanceScore[] @relation("ScoresReceived")
+  performanceScoresGiven    PerformanceScore[] @relation("ScoresGiven")
+  workOutputs               WorkOutput[]
+  attendanceRecords         AttendanceRecord[]
+  goalsAsEmployee           Goal[]    @relation("GoalsAsEmployee")
+  goalsAsSupervisor         Goal[]    @relation("GoalsAsSupervisor")
+  auditLogs                 AuditLog[]
+  notifications             Notification[] @relation("NotificationsForUser")
+  notificationsSent         Notification[] @relation("NotificationsFromActor")
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 }
 
-// ENUMS
+model EvaluationCriteria {
+  id                  String    @id @default(cuid())
+  name                String
+  description         String
+  weight              Float?
+  performanceScores   PerformanceScore[]
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model PerformanceScore {
+  id              String    @id @default(cuid())
+  employeeId      String
+  employee        User      @relation("ScoresReceived", fields: [employeeId], references: [id], onDelete: Cascade)
+  criteriaId      String
+  criteria        EvaluationCriteria @relation(fields: [criteriaId], references: [id], onDelete: Cascade)
+  score           Int
+  comments        String?
+  evaluationDate  DateTime
+  evaluatorId     String?
+  evaluator       User?     @relation("ScoresGiven", fields: [evaluatorId], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model WorkOutput {
+  id              String    @id @default(cuid())
+  employeeId      String
+  employee        User      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  fileUrl         String?
+  submissionDate  DateTime
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model AttendanceRecord {
+  id          String             @id @default(cuid())
+  employeeId  String
+  employee    User               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date        DateTime
+  status      AttendanceStatusType
+  notes       String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+}
+
+model AutoMessageTrigger {
+  id              String         @id @default(cuid())
+  eventName       MessageEventType
+  messageTemplate String
+  isActive        Boolean        @default(true)
+  daysBeforeEvent Int?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model Goal {
+  id            String       @id @default(cuid())
+  title         String
+  description   String?
+  status        GoalStatusType
+  dueDate       DateTime?
+  employeeId    String
+  employee      User         @relation("GoalsAsEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  supervisorId  String?
+  supervisor    User?        @relation("GoalsAsSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model SystemSetting {
+  id                   String   @id @default("global_settings")
+  appName              String   @default("EvalTrack")
+  systemTheme          String   @default("system")
+  maintenanceMode      Boolean  @default(false)
+  notificationsEnabled Boolean  @default(true)
+  emailNotifications   Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  timestamp   DateTime @default(now())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action      AuditActionType
+  targetType  String?
+  targetId    String?
+  details     String?
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  message     String
+  isRead      Boolean  @default(false)
+  link        String?
+  recipientId String
+  recipient   User     @relation("NotificationsForUser", fields: [recipientId], references: [id], onDelete: Cascade)
+  actorId     String?
+  actor       User?    @relation("NotificationsFromActor", fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 enum UserRoleType {
   ADMIN
   SUPERVISOR
   EMPLOYEE
-}
-
-enum GoalStatusType {
-  NOT_STARTED
-  IN_PROGRESS
-  COMPLETED
-  ON_HOLD
-  CANCELLED
 }
 
 enum AttendanceStatusType {
@@ -36,6 +162,14 @@ enum MessageEventType {
   FEEDBACK_REQUEST
   EVALUATION_COMPLETED
   NEW_ASSIGNMENT
+}
+
+enum GoalStatusType {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
+  CANCELLED
 }
 
 enum AuditActionType {
@@ -79,146 +213,4 @@ enum AuditActionType {
   NOTIFICATION_READ
   NOTIFICATION_DELETED
   PERFORMANCE_SCORE_CREATED
-}
-
-// MODELS
-
-model User {
-  id                      String                @id @default(cuid())
-  name                    String
-  email                   String                @unique
-  password                String
-  department              String
-  position                String
-  hireDate                DateTime
-  avatarUrl               String?
-  role                    UserRoleType
-
-  supervisorId            String?
-  supervisor              User?                 @relation("SupervisorEmployee", fields: [supervisorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  supervisedEmployees     User[]                @relation("SupervisorEmployee")
-
-  performanceScoresReceived PerformanceScore[] @relation("EmployeeScores")
-  performanceScoresGiven  PerformanceScore[] @relation("EvaluatorScores")
-  workOutputs             WorkOutput[]
-  attendanceRecords       AttendanceRecord[]
-  goalsAsEmployee         Goal[]             @relation("EmployeeGoals")
-  goalsAsSupervisor       Goal[]             @relation("SupervisorGoals")
-  auditLogs               AuditLog[]
-  
-  notifications           Notification[]     @relation("RecipientNotifications")
-  notificationsGiven      Notification[]     @relation("ActorNotifications")
-
-  createdAt               DateTime           @default(now())
-  updatedAt               DateTime           @updatedAt
-}
-
-model Goal {
-  id           String        @id @default(cuid())
-  title        String
-  description  String?
-  status       GoalStatusType
-  dueDate      DateTime?
-  employeeId   String
-  employee     User          @relation("EmployeeGoals", fields: [employeeId], references: [id], onDelete: Cascade)
-  supervisorId String?
-  supervisor   User?         @relation("SupervisorGoals", fields: [supervisorId], references: [id], onDelete: SetNull)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-}
-
-model EvaluationCriteria {
-  id                String             @id @default(cuid())
-  name              String
-  description       String
-  weight            Float?
-  performanceScores PerformanceScore[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-}
-
-model PerformanceScore {
-  id             String             @id @default(cuid())
-  score          Int
-  comments       String?
-  evaluationDate DateTime
-  employeeId     String
-  employee       User               @relation("EmployeeScores", fields: [employeeId], references: [id], onDelete: Cascade)
-  criteriaId     String
-  criteria       EvaluationCriteria @relation(fields: [criteriaId], references: [id], onDelete: Cascade)
-  evaluatorId    String?
-  evaluator      User?              @relation("EvaluatorScores", fields: [evaluatorId], references: [id], onDelete: SetNull)
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-}
-
-model WorkOutput {
-  id             String   @id @default(cuid())
-  title          String
-  description    String?
-  fileUrl        String?
-  submissionDate DateTime
-  employeeId     String
-  employee       User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-}
-
-model AttendanceRecord {
-  id         String               @id @default(cuid())
-  date       DateTime
-  status     AttendanceStatusType
-  notes      String?
-  employeeId String
-  employee   User                 @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
-}
-
-model AutoMessageTrigger {
-  id              String           @id @default(cuid())
-  eventName       MessageEventType
-  messageTemplate String
-  isActive        Boolean          @default(true)
-  daysBeforeEvent Int?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-}
-
-model SystemSetting {
-  id                   String   @id @default("global_settings")
-  appName              String
-  systemTheme          String   @default("system")
-  maintenanceMode      Boolean  @default(false)
-  notificationsEnabled Boolean  @default(true)
-  emailNotifications   Boolean  @default(true)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-}
-
-model AuditLog {
-  id         String          @id @default(cuid())
-  timestamp  DateTime        @default(now())
-  userId     String?
-  user       User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
-  action     AuditActionType
-  targetType String?
-  targetId   String?
-  details    String?
-}
-
-model Notification {
-  id          String    @id @default(cuid())
-  message     String
-  isRead      Boolean   @default(false)
-  link        String?
-  createdAt   DateTime  @default(now())
-  
-  recipientId String
-  recipient   User      @relation("RecipientNotifications", fields: [recipientId], references: [id], onDelete: Cascade)
-
-  actorId     String?
-  actor       User?     @relation("ActorNotifications", fields: [actorId], references: [id], onDelete: SetNull)
-  
-  updatedAt   DateTime  @updatedAt
 }
