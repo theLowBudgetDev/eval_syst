@@ -339,7 +339,7 @@ export default function AutoMessagingPage() {
                 <div className="space-y-1">
                     <Label htmlFor="trigger-template">Message Template</Label>
                     <Textarea id="trigger-template" value={formData.messageTemplate} onChange={e => setFormData({...formData, messageTemplate: e.target.value})} placeholder="e.g., Hi {{employeeName}}, your review is due on {{reviewDate}}." disabled={isSubmitting}/>
-                    <p className="text-xs text-muted-foreground">Available placeholders: {{employeeName}}, {{supervisorName}}, {{deadlineDate}}, etc. (Context-dependent)</p>
+                    <p className="text-xs text-muted-foreground">Available placeholders: {'{{employeeName}}'}, {'{{supervisorName}}'}, {'{{deadlineDate}}'}, etc. (Context-dependent)</p>
                 </div>
                  <div className="space-y-1">
                     <Label htmlFor="trigger-days">Days Before Event (Optional)</Label>

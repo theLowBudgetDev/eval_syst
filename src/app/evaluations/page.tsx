@@ -25,6 +25,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -43,6 +44,7 @@ import { Label } from "@/components/ui/label";
 import { format, parseISO } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 
 
 interface CriteriaFormData {
@@ -82,7 +84,20 @@ export default function EvaluationsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [itemToDelete, setItemToDelete] = React.useState<{id: string, type: 'criteria' | 'score', name?: string} | null>(null);
   const [isDeleting, setIsDeleting] = React.useState(false);
+  
+  const [isReviewDetailOpen, setIsReviewDetailOpen] = React.useState(false);
+  const [viewingScore, setViewingScore] = React.useState<PerformanceScore | null>(null);
 
+  const getScoreBadgeVariant = (scoreValue: number) => {
+    if (scoreValue >= 4) return "default";
+    if (scoreValue === 3) return "secondary";
+    return "destructive";
+  };
+  
+  const handleOpenReviewDetailDialog = (score: PerformanceScore) => {
+    setViewingScore(score);
+    setIsReviewDetailOpen(true);
+  };
 
   const fetchData = React.useCallback(async () => {
     setIsLoadingData(true);
@@ -251,6 +266,12 @@ export default function EvaluationsPage() {
         return;
     }
     setIsSubmittingReview(true);
+    
+    const headers = new Headers();
+    headers.append('Content-Type', 'application/json');
+    headers.append('X-User-Id', user.id);
+    headers.append('X-User-Role', user.role);
+
     const payload = {
       ...reviewFormData,
       score: Number(reviewFormData.score), // Ensure score is number
@@ -258,7 +279,7 @@ export default function EvaluationsPage() {
       evaluationDate: new Date(reviewFormData.evaluationDate).toISOString() // Ensure ISO string
     };
     try {
-      const res = await fetch('/api/performance-scores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetch('/api/performance-scores', { method: 'POST', headers, body: JSON.stringify(payload) });
       if (!res.ok) {
         const errorBody = await res.json().catch(() => ({ message: `Failed to save review (status ${res.status}, non-JSON response)` }));
         throw new Error(errorBody.error || errorBody.message || `Failed to save review (status ${res.status})`);
@@ -398,7 +419,7 @@ export default function EvaluationsPage() {
                       </TableCell>
                       <TableCell>{getEvaluatorName(score.evaluatorId)}</TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Button variant="outline" size="icon" onClick={() => toast({title: `Review Details: ${getEmployeeName(score.employeeId)}`, description: score.comments || "No comments for this review."})}>
+                        <Button variant="outline" size="icon" onClick={() => handleOpenReviewDetailDialog(score)}>
                           <Eye className="h-4 w-4" />
                         </Button>
                          {(user.role === 'ADMIN' || (user.role === 'SUPERVISOR' && score.evaluatorId === user.id)) && (
@@ -538,7 +559,41 @@ export default function EvaluationsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
+      
+      <Dialog open={isReviewDetailOpen} onOpenChange={setIsReviewDetailOpen}>
+        <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle>Review Details</DialogTitle>
+                <DialogDescription>
+                    Evaluation for <strong>{viewingScore?.employee?.name || getEmployeeName(viewingScore?.employeeId || '')}</strong> conducted on {viewingScore ? format(parseISO(viewingScore.evaluationDate), "PP") : ''}.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4 text-sm">
+                <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                    <Label className="text-muted-foreground">Evaluator</Label>
+                    <span>{viewingScore?.evaluator?.name || getEvaluatorName(viewingScore?.evaluatorId || '')}</span>
+                </div>
+                <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                    <Label className="text-muted-foreground">Criteria</Label>
+                    <Badge variant="secondary">{viewingScore?.criteria?.name || getCriteriaName(viewingScore?.criteriaId || '')}</Badge>
+                </div>
+                <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                    <Label className="text-muted-foreground">Score</Label>
+                     <Badge variant={viewingScore ? getScoreBadgeVariant(viewingScore.score) : 'outline'}>{viewingScore?.score}/5</Badge>
+                </div>
+                 <Separator />
+                <div>
+                    <Label className="text-muted-foreground">Comments</Label>
+                    <p className="mt-1 text-card-foreground bg-muted/50 p-3 rounded-md min-h-[60px]">
+                        {viewingScore?.comments || "No comments provided."}
+                    </p>
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsReviewDetailOpen(false)}>Close</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

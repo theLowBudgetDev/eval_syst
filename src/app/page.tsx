@@ -4,7 +4,7 @@
 import * as React from "react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import type { DashboardMetric, PerformanceScore, AppUser, PerformanceTrendPoint, EvaluationDistributionPoint } from "@/types";
+import type { DashboardMetric, PerformanceScore, AppUser, PerformanceTrendPoint, EvaluationDistributionPoint, AttendanceRecord } from "@/types";
 import { TrendingUp, TrendingDown, Minus, AlertTriangle, Users, ClipboardList } from "lucide-react";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Line, LineChart, Pie, PieChart, Cell } from "recharts";
@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CartesianGrid, XAxis, YAxis } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingIndicator } from "@/components/shared/LoadingIndicator";
+import { subDays, isAfter, parseISO } from "date-fns";
 
 const chartConfigPerformance = {
   avgScore: {
@@ -71,9 +72,10 @@ export default function DashboardPage() {
           fetch("/api/performance-scores"),
           fetch("/api/analytics/performance-trends"),
           fetch("/api/analytics/evaluation-distribution"),
+          fetch("/api/attendance-records"),
         ])
-          .then(async ([usersRes, scoresRes, trendsRes, distributionRes]) => {
-            if (!usersRes.ok || !scoresRes.ok || !trendsRes.ok || !distributionRes.ok) {
+          .then(async ([usersRes, scoresRes, trendsRes, distributionRes, attendanceRes]) => {
+            if (!usersRes.ok || !scoresRes.ok || !trendsRes.ok || !distributionRes.ok || !attendanceRes.ok) {
               // A simple catch-all for any failed fetch
               throw new Error("Failed to fetch all necessary dashboard data.");
             }
@@ -81,6 +83,7 @@ export default function DashboardPage() {
             const usersData: AppUser[] = await usersRes.json();
             const scoresData: PerformanceScore[] = await scoresRes.json();
             const trendPointsData: PerformanceTrendPoint[] = await trendsRes.json();
+            const attendanceData: AttendanceRecord[] = await attendanceRes.json();
             setPerformanceTrendData(trendPointsData);
             setEvaluationDistributionData(await distributionRes.json());
             
@@ -114,6 +117,12 @@ export default function DashboardPage() {
             }
             const finalTrend = parseFloat(trend.toFixed(1));
 
+            const weekAgo = subDays(new Date(), 7);
+            const attendanceIssuesThisWeek = attendanceData.filter(record => {
+                const recordDate = parseISO(record.date);
+                return isAfter(recordDate, weekAgo) && (record.status === 'ABSENT' || record.status === 'LATE');
+            }).length;
+
             setMetrics([
               {
                 title: "Total Employees",
@@ -138,10 +147,10 @@ export default function DashboardPage() {
               },
               {
                 title: "Attendance Issues",
-                value: 0,
+                value: attendanceIssuesThisWeek,
                 icon: AlertTriangle,
                 trend: 0,
-                description: "This week (mock data)",
+                description: "Issues in the last 7 days",
               },
             ]);
             setIsLoadingData(false);
