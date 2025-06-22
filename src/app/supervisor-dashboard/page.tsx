@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { Users, ClipboardList, MessageSquareWarning, CheckCircle2, Loader2 } from "lucide-react";
-import type { AppUser, PerformanceScore, WorkOutput } from "@/types";
+import type { AppUser, PerformanceScore, WorkOutput, Goal } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,7 @@ export default function SupervisorDashboardPage() {
   const [teamMembers, setTeamMembers] = React.useState<AppUser[]>([]);
   const [teamScores, setTeamScores] = React.useState<PerformanceScore[]>([]);
   const [teamWorkOutputs, setTeamWorkOutputs] = React.useState<WorkOutput[]>([]);
+  const [teamGoals, setTeamGoals] = React.useState<Goal[]>([]);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
 
   React.useEffect(() => {
@@ -33,11 +34,16 @@ export default function SupervisorDashboardPage() {
         else router.push('/login');
       } else {
         setIsLoadingData(true);
+        const headers = new Headers();
+        headers.append('X-User-Id', user.id);
+        headers.append('X-User-Role', user.role);
+
         Promise.all([
           fetch(`/api/users?supervisorId=${user.id}`),
           fetch(`/api/performance-scores`),
-          fetch(`/api/work-outputs`) 
-        ]).then(async ([teamRes, scoresRes, workOutputsRes]) => {
+          fetch(`/api/work-outputs`),
+          fetch(`/api/goals`, { headers }) // Fetch all goals visible to supervisor
+        ]).then(async ([teamRes, scoresRes, workOutputsRes, goalsRes]) => {
           if (!teamRes.ok) {
             const errorBody = await teamRes.json().catch(() => ({ message: `Failed to fetch team (status ${teamRes.status}, non-JSON response)` }));
             throw new Error(errorBody.error || errorBody.message || `Failed to fetch team (status ${teamRes.status})`);
@@ -60,6 +66,14 @@ export default function SupervisorDashboardPage() {
           const allWorkOutputsData: WorkOutput[] = await workOutputsRes.json();
           setTeamWorkOutputs(allWorkOutputsData.filter(output => teamMemberIds.includes(output.employeeId)));
 
+          if (!goalsRes.ok) {
+            const errorBody = await goalsRes.json().catch(() => ({ message: `Failed to fetch goals (status ${goalsRes.status}, non-JSON response)` }));
+            throw new Error(errorBody.error || errorBody.message || `Failed to fetch goals (status ${goalsRes.status})`);
+          }
+          const allGoalsData: Goal[] = await goalsRes.json();
+          setTeamGoals(allGoalsData.filter(goal => teamMemberIds.includes(goal.employeeId)));
+
+
         }).catch(err => {
           toast({ title: "Error Fetching Dashboard Data", description: (err as Error).message, variant: "destructive" });
           setTeamMembers([]);
@@ -81,6 +95,10 @@ export default function SupervisorDashboardPage() {
         !teamScores.some(score => score.employeeId === member.id && new Date(score.evaluationDate) > threeMonthsAgo)
     ).length;
   }, [teamMembers, teamScores]);
+
+  const completedTeamTasksCount = React.useMemo(() => {
+    return teamGoals.filter(goal => goal.status === 'COMPLETED').length;
+  }, [teamGoals]);
 
   const getScoreBadgeVariant = (scoreValue: number) => {
     if (scoreValue >= 4) return "default";
@@ -140,12 +158,12 @@ export default function SupervisorDashboardPage() {
 
         <Card className="shadow-md border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed Tasks (Team)</CardTitle>
-            <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Completed Goals (Team)</CardTitle>
+            {isLoadingData ? <Loader2 className="h-5 w-5 text-muted-foreground animate-spin"/> : <CheckCircle2 className="h-5 w-5 text-muted-foreground" />}
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold font-headline">N/A</div> {/* Placeholder */}
-            <p className="text-xs text-muted-foreground">Team tasks completed this cycle.</p>
+            <div className="text-3xl font-bold font-headline">{isLoadingData ? <Skeleton className="h-9 w-12 inline-block"/> : completedTeamTasksCount}</div>
+            <p className="text-xs text-muted-foreground">Team goals completed.</p>
           </CardContent>
         </Card>
       </div>

@@ -56,6 +56,11 @@ export default function EmployeeDashboardPage() {
     return userData?.workOutputs?.length || 0;
   }, [userData]);
 
+  const pendingTasksCount = React.useMemo(() => {
+    if (!userData?.goalsAsEmployee) return 0;
+    return userData.goalsAsEmployee.filter(g => g.status === 'IN_PROGRESS' || g.status === 'NOT_STARTED').length;
+  }, [userData]);
+
 
   if (authIsLoading || !user || user.role !== 'EMPLOYEE') {
      return (
@@ -109,12 +114,15 @@ export default function EmployeeDashboardPage() {
 
         <Card className="shadow-md border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Tasks</CardTitle>
-            <CheckSquare className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Pending Goals</CardTitle>
+            {isLoadingData ? <Loader2 className="h-5 w-5 text-muted-foreground animate-spin"/> : <CheckSquare className="h-5 w-5 text-muted-foreground" />}
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold font-headline">0</div> {/* Placeholder - needs backend logic */}
-            <p className="text-xs text-muted-foreground">Tasks requiring your attention.</p>
+            <div className="text-3xl font-bold font-headline">{isLoadingData ? <Skeleton className="h-9 w-12 inline-block"/> : pendingTasksCount}</div>
+            <p className="text-xs text-muted-foreground">Goals that are not yet completed.</p>
+            {isLoadingData ? <Skeleton className="h-5 w-20 mt-1" /> : 
+                <Button variant="link" className="px-0" onClick={() => router.push('/goals')}>View Goals</Button>
+            }
           </CardContent>
         </Card>
 
@@ -139,7 +147,7 @@ export default function EmployeeDashboardPage() {
                 <Button onClick={() => router.push('/my-progress')} disabled={isLoadingData}>
                     <FileText className="mr-2 h-4 w-4" /> Submit Work Output
                 </Button>
-                <Button variant="outline" onClick={() => toast({title: "Coming Soon", description: "Request feedback functionality coming soon."})} disabled={isLoadingData}>
+                <Button variant="outline" disabled title="Request feedback functionality coming soon.">
                     <MessageSquarePlus className="mr-2 h-4 w-4" /> Request Feedback
                 </Button>
             </CardContent>

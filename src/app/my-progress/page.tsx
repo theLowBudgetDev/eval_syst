@@ -35,6 +35,14 @@ interface NewWorkOutputData {
   file?: File | null; // For actual file upload
 }
 
+const toBase64 = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+  });
+
 export default function MyProgressPage() {
   const { user, isLoading: authIsLoading } = useAuth();
   const router = useRouter();
@@ -96,7 +104,7 @@ export default function MyProgressPage() {
       try {
         finalFileUrl = await toBase64(newWorkOutput.file);
       } catch (error) {
-        toast({ title: "Avatar Upload Failed", description: "Could not read the selected image file.", variant: "destructive"});
+        toast({ title: "File Upload Failed", description: "Could not read the selected image file.", variant: "destructive"});
         setIsSubmittingWorkOutput(false);
         return;
       }
@@ -321,13 +329,3 @@ export default function MyProgressPage() {
     </div>
   );
 }
-
-const toBase64 = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = (error) => reject(error);
-  });
-
-    

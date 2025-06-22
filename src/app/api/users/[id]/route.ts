@@ -40,6 +40,9 @@ export async function GET(request: Request, { params }: { params: Params }) {
         attendanceRecords: {
           orderBy: { date: 'desc' }
         },
+        goalsAsEmployee: {
+          orderBy: { dueDate: 'asc' }
+        },
       },
     });
 

@@ -166,7 +166,7 @@ export default function SupervisorAssignmentsPage() {
         title="Supervisor Assignments"
         description="Assign and manage supervisors for employees."
         actions={
-          <Button onClick={() => toast({ title: "Coming Soon", description: "Batch assign functionality is not yet implemented." })}>
+          <Button disabled title="Batch assign functionality is not yet implemented.">
             <UserPlus className="mr-2 h-4 w-4" /> Batch Assign Supervisors
           </Button>
         }
