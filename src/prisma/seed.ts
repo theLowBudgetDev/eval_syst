@@ -26,6 +26,7 @@ async function main() {
   console.log('Start seeding ...');
 
   // Clear existing data in a safe order
+  await prisma.notification.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.goal.deleteMany();
   await prisma.performanceScore.deleteMany();
@@ -219,6 +220,7 @@ async function main() {
 
   const firstEmployeeForGoal = mockAuthUsersWithPasswords.find(u => u.role === 'EMPLOYEE');
   const firstSupervisorForGoal = mockAuthUsersWithPasswords.find(u => u.role === 'SUPERVISOR');
+  const firstAdmin = mockAuthUsersWithPasswords.find(u => u.role === 'ADMIN');
 
   if (firstEmployeeForGoal && createdUsersMap[firstEmployeeForGoal.id]) {
     await prisma.goal.create({
@@ -253,6 +255,38 @@ async function main() {
     });
   }
   console.log('Seeded goals.');
+
+  if (firstSupervisorForGoal && firstEmployeeForGoal) {
+      await prisma.notification.create({
+          data: {
+              recipientId: createdUsersMap[firstEmployeeForGoal.id],
+              actorId: createdUsersMap[firstSupervisorForGoal.id],
+              message: 'assigned you a new goal: "Complete Project Alpha Q3"',
+              link: '/goals',
+              isRead: true
+          }
+      });
+      await prisma.notification.create({
+          data: {
+              recipientId: createdUsersMap[firstEmployeeForGoal.id],
+              actorId: createdUsersMap[firstSupervisorForGoal.id],
+              message: 'left a performance review for you.',
+              link: '/my-evaluations',
+              isRead: false
+          }
+      });
+  }
+  if(firstAdmin) {
+     await prisma.notification.create({
+          data: {
+              recipientId: createdUsersMap[firstAdmin.id],
+              message: 'Welcome to EvalTrack! Check out the settings to get started.',
+              link: '/admin/settings',
+              isRead: false
+          }
+      });
+  }
+  console.log('Seeded notifications.');
 
   const adminUserIdForLog = adminUsers[0] ? createdUsersMap[adminUsers[0].id] : null;
   const supervisorUserIdForLog = supervisorUsers[0] ? createdUsersMap[supervisorUsers[0].id] : null;

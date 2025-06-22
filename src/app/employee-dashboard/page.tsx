@@ -101,8 +101,8 @@ export default function EmployeeDashboardPage() {
      return (
         <div className="space-y-6">
             <PageHeader title="Welcome!" description="Your personal performance and task overview."/>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-[150px] w-full rounded-lg" />)}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-[150px] w-full rounded-lg" />)}
             </div>
             <Skeleton className="h-[120px] w-full rounded-lg" />
         </div>
@@ -116,7 +116,7 @@ export default function EmployeeDashboardPage() {
     <div className="space-y-6">
       <PageHeader title={`Welcome, ${user.name}!`} description="Your personal performance and task overview." />
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card className="shadow-md border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">My Latest Evaluation</CardTitle>
@@ -150,17 +150,6 @@ export default function EmployeeDashboardPage() {
             <div className="text-3xl font-bold font-headline">{isLoadingData ? <Skeleton className="h-9 w-12"/> : pendingTasksCount}</div>
             <p className="text-xs text-muted-foreground">Goals that are not yet completed.</p>
             <Button variant="link" className="px-0" onClick={() => router.push('/goals')}>View Goals</Button>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-md border-border">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Recent Notifications</CardTitle>
-            <Bell className="h-5 w-5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold font-headline">N/A</div>
-            <p className="text-xs text-muted-foreground">No new notifications.</p>
           </CardContent>
         </Card>
       </div>

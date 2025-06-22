@@ -1,6 +1,17 @@
 
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import type { UserRoleType } from '@/types';
+import { headers } from 'next/headers';
+
+async function getCurrentUser(): Promise<{ id: string; role: UserRoleType } | null> {
+  const userId = headers().get('X-User-Id');
+  const userRole = headers().get('X-User-Role') as UserRoleType;
+  if (userId && userRole) {
+    return { id: userId, role: userRole };
+  }
+  return null;
+}
 
 // GET /api/performance-scores - Fetch all performance scores
 export async function GET() {
@@ -30,6 +41,11 @@ export async function GET() {
 // POST /api/performance-scores - Create a new performance score
 export async function POST(request: Request) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return NextResponse.json({ message: 'Authentication required' }, { status: 401 });
+    }
+
     const data = await request.json();
     const { employeeId, criteriaId, score, comments, evaluationDate, evaluatorId } = data;
 
@@ -37,6 +53,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Missing required fields: employeeId, criteriaId, score, evaluationDate, evaluatorId' }, { status: 400 });
     }
     
+    if(currentUser.id !== evaluatorId) {
+        return NextResponse.json({ message: 'Forbidden: Evaluator ID does not match current user.'}, { status: 403 });
+    }
+
     const parsedScore = parseInt(String(score), 10);
     if (isNaN(parsedScore) || parsedScore < 1 || parsedScore > 5) {
         return NextResponse.json({ message: 'Score must be a number between 1 and 5.' }, { status: 400 });
@@ -44,16 +64,34 @@ export async function POST(request: Request) {
 
     try {
         const newScore = await prisma.performanceScore.create({
-        data: {
-            employeeId,
-            criteriaId,
-            score: parsedScore,
-            comments,
-            evaluationDate: new Date(evaluationDate), // Ensure it's a Date object
-            evaluatorId,
-        },
+            data: {
+                employeeId,
+                criteriaId,
+                score: parsedScore,
+                comments,
+                evaluationDate: new Date(evaluationDate), // Ensure it's a Date object
+                evaluatorId,
+            },
+            include: {
+                criteria: true
+            }
         });
-        return NextResponse.json(newScore, { status: 201 });
+
+        // Create a notification for the employee who was reviewed
+        if (currentUser.id !== employeeId) {
+            await prisma.notification.create({
+                data: {
+                    recipientId: employeeId,
+                    actorId: currentUser.id,
+                    message: `completed an evaluation for you on "${newScore.criteria.name}".`,
+                    link: `/my-evaluations`,
+                }
+            });
+        }
+
+        const { criteria, ...scoreToReturn } = newScore;
+        return NextResponse.json(scoreToReturn, { status: 201 });
+
     } catch (dbError: any) {
         console.error("Prisma error creating performance score:", dbError);
         if (dbError.code === 'P2003') { // Foreign key constraint failed
@@ -81,5 +119,3 @@ export async function POST(request: Request) {
     });
   }
 }
-
-    

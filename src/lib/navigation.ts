@@ -1,6 +1,6 @@
 
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Users, ClipboardList, LineChart, UserCheck, Settings, Bell, LogIn, UserCog, Target } from "lucide-react";
+import { LayoutDashboard, Users, ClipboardList, LineChart, UserCheck, Settings, Bell, LogIn, UserCog, Target, BellRing } from "lucide-react";
 import type { UserRoleType } from "@/types"; // Using UserRoleType from types
 
 export interface NavLink {
@@ -42,6 +42,12 @@ const allNavLinks: NavLink[] = [
     label: "My Profile",
     icon: UserCog,
     roles: ["EMPLOYEE", "SUPERVISOR", "ADMIN"], // All roles can view their profile
+  },
+  {
+    href: "/my-notifications",
+    label: "Notifications",
+    icon: BellRing,
+    roles: ["EMPLOYEE", "SUPERVISOR", "ADMIN"],
   },
   {
     href: "/evaluations",

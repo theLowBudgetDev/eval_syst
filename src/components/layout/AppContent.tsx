@@ -28,10 +28,12 @@ import {
 } from '@/components/ui/sheet';
 import { Menu, LogOut } from 'lucide-react';
 import { getNavLinks, type NavLink as NavLinkType } from '@/lib/navigation';
-import type { UserRoleType, AppUser } from '@/types'; // Import AppUser
+import type { UserRoleType, AppUser } from '@/types';
 import { DarkModeToggle } from '@/components/shared/DarkModeToggle';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { LoadingIndicator } from '@/components/shared/LoadingIndicator';
+import { useNotifications } from '@/hooks/use-notifications';
+import { NotificationBell } from '@/components/shared/NotificationBell';
 
 function RenderNavLinks({ role, onLinkClick }: { role: UserRoleType | null, onLinkClick?: () => void }) {
   const navLinks = getNavLinks(role);
@@ -76,6 +78,8 @@ function LayoutRenderer({
   children: React.ReactNode
 }) {
   const sidebarContext = useSidebar(); // Called safely within SidebarProvider's context
+  const { notifications, unreadCount, markAllAsRead } = useNotifications(user);
+
 
   const handleMobileLinkClick = () => {
     setIsMobileSheetOpen(false);
@@ -168,6 +172,11 @@ function LayoutRenderer({
 
           <div className="flex items-center gap-1 md:gap-3">
             <DarkModeToggle />
+            <NotificationBell 
+              notifications={notifications}
+              unreadCount={unreadCount}
+              onOpen={markAllAsRead}
+            />
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" asChild>

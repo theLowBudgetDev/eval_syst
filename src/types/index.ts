@@ -1,4 +1,5 @@
 
+
 export type UserRoleType = 'ADMIN' | 'SUPERVISOR' | 'EMPLOYEE';
 
 // This AppUser type is for client-side use and API responses.
@@ -22,6 +23,7 @@ export interface AppUser {
   goalsAsEmployee?: Goal[];
   goalsAsSupervisor?: Goal[];
   auditLogs?: AuditLog[];
+  notifications?: Notification[];
 }
 
 export interface EvaluationCriteria {
@@ -144,7 +146,8 @@ export type AuditActionType =
   | "AUTH_PASSWORD_CHANGE_SUCCESS" | "AUTH_PASSWORD_CHANGE_FAILURE"
   | "DATA_BACKUP_SUCCESS" | "DATA_BACKUP_FAILURE"
   | "BATCH_ASSIGNMENT_SUCCESS" | "BATCH_ASSIGNMENT_FAILURE"
-  | "FEEDBACK_REQUESTED";
+  | "FEEDBACK_REQUESTED"
+  | "NOTIFICATION_CREATED" | "NOTIFICATION_READ" | "NOTIFICATION_DELETED";
 
 
 export interface AuditLog {
@@ -167,4 +170,18 @@ export interface SystemSetting {
   emailNotifications: boolean;
   createdAt: string; // ISO date string
   updatedAt: string; // ISO date string
+}
+
+export interface Notification {
+  id: string;
+  message: string;
+  isRead: boolean;
+  link?: string | null;
+  createdAt: string; // ISO date string
+  recipientId: string;
+  actorId?: string | null;
+  actor?: {
+    name: string;
+    avatarUrl?: string | null;
+  } | null;
 }

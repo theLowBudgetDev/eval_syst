@@ -145,6 +145,23 @@ export async function POST(request: Request) {
         supervisorId: supervisorForGoal, 
       },
     });
+
+    // Create a notification if someone else created the goal for the employee
+    if (currentUser.id !== effectiveEmployeeId) {
+        const message = title.startsWith('Feedback Request from')
+            ? `sent you a feedback request.`
+            : `assigned you a new goal: "${newGoal.title.substring(0, 30)}..."`;
+
+        await prisma.notification.create({
+            data: {
+                recipientId: effectiveEmployeeId,
+                actorId: currentUser.id,
+                message: message,
+                link: '/goals',
+            }
+        });
+    }
+
     return NextResponse.json(newGoal, { status: 201 });
   } catch (error: any) {
     console.error("Error creating goal:", error);
