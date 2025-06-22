@@ -282,7 +282,8 @@ async function main() {
               recipientId: createdUsersMap[firstAdmin.id],
               message: 'Welcome to EvalTrack! Check out the settings to get started.',
               link: '/admin/settings',
-              isRead: false
+              isRead: false,
+              actorId: createdUsersMap[firstAdmin.id] // A system notification can be "from" the admin.
           }
       });
   }
