@@ -1,4 +1,5 @@
 
+
 import { PrismaClient } from '@prisma/client';
 import type { UserRoleType, AttendanceStatusType, MessageEventType, GoalStatusType, AuditActionType, SystemSetting } from '../src/types';
 import { mockAuthUsers as originalMockAuthUsersConfig } from '../src/contexts/AuthContext';
@@ -36,8 +37,8 @@ async function main() {
   await prisma.evaluationCriteria.deleteMany();
   await prisma.systemSetting.deleteMany();
   // Delete users ensuring supervised employees are deleted first or supervisorId is nullable
-  await prisma.user.deleteMany({ where: { supervisorId: { not: null } } });
-  await prisma.user.deleteMany({ where: { supervisorId: null } });
+  await prisma.user.updateMany({ data: { supervisorId: null } });
+  await prisma.user.deleteMany();
 
 
   // Seed System Settings

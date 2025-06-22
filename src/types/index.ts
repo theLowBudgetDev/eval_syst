@@ -1,5 +1,6 @@
 
 
+
 export type UserRoleType = 'ADMIN' | 'SUPERVISOR' | 'EMPLOYEE';
 
 // This AppUser type is for client-side use and API responses.
@@ -147,7 +148,8 @@ export type AuditActionType =
   | "DATA_BACKUP_SUCCESS" | "DATA_BACKUP_FAILURE"
   | "BATCH_ASSIGNMENT_SUCCESS" | "BATCH_ASSIGNMENT_FAILURE"
   | "FEEDBACK_REQUESTED"
-  | "NOTIFICATION_CREATED" | "NOTIFICATION_READ" | "NOTIFICATION_DELETED";
+  | "NOTIFICATION_CREATED" | "NOTIFICATION_READ" | "NOTIFICATION_DELETED"
+  | "PERFORMANCE_SCORE_CREATED";
 
 
 export interface AuditLog {
@@ -178,6 +180,7 @@ export interface Notification {
   isRead: boolean;
   link?: string | null;
   createdAt: string; // ISO date string
+  updatedAt: string; // ISO date string
   recipientId: string;
   actorId?: string | null;
   actor?: {
