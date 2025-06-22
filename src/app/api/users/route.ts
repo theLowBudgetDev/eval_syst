@@ -2,6 +2,9 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import type { UserRoleType } from '@/types'; // Using string literal union from types
+import bcrypt from 'bcrypt';
+
+const SALT_ROUNDS = 10;
 
 // GET /api/users - Fetch all users or users by supervisorId
 export async function GET(request: Request) {
@@ -36,10 +39,14 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const data = await request.json();
-    const { name, email, department, position, hireDate, avatarUrl, role, supervisorId } = data;
+    const { name, email, department, position, hireDate, avatarUrl, role, supervisorId, password } = data;
 
-    if (!name || !email || !department || !position || !hireDate || !role) {
-      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
+    if (!name || !email || !department || !position || !hireDate || !role || !password) {
+      return NextResponse.json({ message: 'Missing required fields. Name, email, department, position, hire date, role, and password are required.' }, { status: 400 });
+    }
+
+    if (password.length < 8) {
+      return NextResponse.json({ message: 'Password must be at least 8 characters long.' }, { status: 400 });
     }
 
     // Validate role against UserRoleType
@@ -48,10 +55,13 @@ export async function POST(request: Request) {
         return NextResponse.json({ message: `Invalid role specified: ${role}` }, { status: 400 });
     }
 
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+
     const newUser = await prisma.user.create({
       data: {
         name,
         email,
+        password: hashedPassword,
         department,
         position,
         hireDate: new Date(hireDate),
@@ -60,7 +70,10 @@ export async function POST(request: Request) {
         supervisorId: supervisorId || null,
       },
     });
-    return NextResponse.json(newUser, { status: 201 });
+
+    const { password: _, ...userToReturn } = newUser;
+
+    return NextResponse.json(userToReturn, { status: 201 });
   } catch (error: any) {
     console.error("Critical error in POST /api/users:", error);
     let status = 500;
@@ -90,4 +103,3 @@ export async function POST(request: Request) {
     });
   }
 }
-

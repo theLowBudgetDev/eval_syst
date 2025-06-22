@@ -2,20 +2,36 @@
 "use client";
 
 import * as React from "react";
+import * as z from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { Edit, Loader2 } from "lucide-react";
+import { Edit, Loader2, KeyRound } from "lucide-react";
 import { EmployeeForm } from "@/components/employees/EmployeeForm";
 import type { AppUser } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const passwordFormSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required."),
+  newPassword: z.string().min(8, "New password must be at least 8 characters."),
+  confirmPassword: z.string()
+}).refine(data => data.newPassword === data.confirmPassword, {
+  message: "New passwords do not match.",
+  path: ["confirmPassword"], // path of error
+});
+
+type PasswordFormData = z.infer<typeof passwordFormSchema>;
+
 
 export default function MyProfilePage() {
   const { user: loggedInUser, isLoading: authIsLoading, login: updateAuthContextUser } = useAuth();
@@ -28,6 +44,12 @@ export default function MyProfilePage() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   
   const [currentUserDetails, setCurrentUserDetails] = React.useState<AppUser | null>(loggedInUser);
+  const [isChangingPassword, setIsChangingPassword] = React.useState(false);
+
+  const passwordForm = useForm<PasswordFormData>({
+    resolver: zodResolver(passwordFormSchema),
+    defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" }
+  });
 
   React.useEffect(() => {
     if (!authIsLoading && !loggedInUser) {
@@ -62,7 +84,7 @@ export default function MyProfilePage() {
     setIsFormOpen(true);
   }
 
-  const handleFormSubmit = async (employeeData: AppUser, isEditing: boolean, avatarFile?: File | null) => {
+  const handleFormSubmit = async (employeeData: Partial<AppUser>, isEditing: boolean, avatarFile?: File | null) => {
     if (!loggedInUser || employeeData.id !== loggedInUser.id) {
         toast({ title: "Error", description: "Invalid operation. Cannot update profile.", variant: "destructive"});
         return;
@@ -72,22 +94,11 @@ export default function MyProfilePage() {
     let finalAvatarUrl = employeeData.avatarUrl;
 
     if (avatarFile) {
-      // ** Placeholder for actual file upload **
-      // In a real app, you would:
-      // 1. Upload `avatarFile` to a service (Firebase Storage, S3, etc.)
-      // 2. Get the downloadable URL from the service.
-      // 3. Set `finalAvatarUrl = newUrlFromUploadService;`
-      // For this example, we'll simulate this by just showing a toast.
-      // The API will receive whatever was in `employeeData.avatarUrl` or empty if cleared by file selection.
-      toast({ title: "File Selected", description: `File "${avatarFile.name}" would be uploaded here. Using existing/provided URL for now.` });
-      // For demo, if a file is selected, we might clear the URL or use a placeholder.
-      // finalAvatarUrl = ""; // Or the URL from your upload service
+      // Placeholder for file upload
+      toast({ title: "File Selected", description: `File "${avatarFile.name}" would be uploaded here. This is a demo.` });
     }
     
-    const payload = { 
-        ...employeeData, 
-        avatarUrl: finalAvatarUrl 
-    };
+    const payload = { ...employeeData, avatarUrl: finalAvatarUrl };
     if (payload.hireDate && payload.hireDate.includes('T')) {
         payload.hireDate = payload.hireDate.split('T')[0];
     }
@@ -95,7 +106,6 @@ export default function MyProfilePage() {
         delete (payload as any).role;
         delete (payload as any).supervisorId;
     }
-
 
     try {
         const res = await fetch(`/api/users/${loggedInUser.id}`, {
@@ -107,9 +117,11 @@ export default function MyProfilePage() {
             const errorData = await res.json();
             throw new Error(errorData.message || "Failed to update profile");
         }
-        const updatedUserFromApi: AppUser = await res.json();
-        updateAuthContextUser(updatedUserFromApi); 
-        setCurrentUserDetails(updatedUserFromApi); 
+        const updatedUserFromApi = await res.json();
+        // Since API doesn't return full nested user, merge essential fields
+        const updatedContextUser = { ...loggedInUser, ...updatedUserFromApi };
+        updateAuthContextUser(updatedContextUser); 
+        setCurrentUserDetails(updatedContextUser); 
         toast({ title: "Profile Updated", description: "Your details have been successfully updated."});
         setIsFormOpen(false);
     } catch (error) {
@@ -118,6 +130,37 @@ export default function MyProfilePage() {
         setIsSubmitting(false);
     }
   };
+  
+  const handlePasswordChangeSubmit = async (data: PasswordFormData) => {
+    if (!loggedInUser) return;
+    setIsChangingPassword(true);
+
+    const headers = new Headers();
+    headers.append('X-User-Id', loggedInUser.id);
+    headers.append('X-User-Role', loggedInUser.role);
+    headers.append('Content-Type', 'application/json');
+
+    try {
+      const res = await fetch(`/api/users/${loggedInUser.id}/change-password`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(data),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Failed to change password");
+      }
+
+      toast({ title: "Password Changed", description: "Your password has been successfully updated." });
+      passwordForm.reset();
+    } catch (error) {
+      toast({ title: "Password Change Failed", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
 
   if (authIsLoading || !currentUserDetails) {
     return (
@@ -200,12 +243,46 @@ export default function MyProfilePage() {
         </CardContent>
       </Card>
       
+      <Card className="shadow-lg border-border">
+        <CardHeader>
+            <CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5 text-primary"/>Change Password</CardTitle>
+            <CardDescription>Update your password here. Use a strong, unique password.</CardDescription>
+        </CardHeader>
+        <form onSubmit={passwordForm.handleSubmit(handlePasswordChangeSubmit)}>
+            <CardContent className="space-y-4">
+                <div className="space-y-2">
+                    <Label htmlFor="currentPassword">Current Password</Label>
+                    <Input id="currentPassword" type="password" {...passwordForm.register("currentPassword")} disabled={isChangingPassword}/>
+                    {passwordForm.formState.errors.currentPassword && <p className="text-sm text-destructive">{passwordForm.formState.errors.currentPassword.message}</p>}
+                </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="newPassword">New Password</Label>
+                        <Input id="newPassword" type="password" {...passwordForm.register("newPassword")} disabled={isChangingPassword}/>
+                        {passwordForm.formState.errors.newPassword && <p className="text-sm text-destructive">{passwordForm.formState.errors.newPassword.message}</p>}
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                        <Input id="confirmPassword" type="password" {...passwordForm.register("confirmPassword")} disabled={isChangingPassword}/>
+                        {passwordForm.formState.errors.confirmPassword && <p className="text-sm text-destructive">{passwordForm.formState.errors.confirmPassword.message}</p>}
+                    </div>
+                </div>
+            </CardContent>
+            <CardFooter>
+                <Button type="submit" disabled={isChangingPassword}>
+                    {isChangingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                    Update Password
+                </Button>
+            </CardFooter>
+        </form>
+      </Card>
+      
       {isFormOpen && currentUserDetails && (
         <EmployeeForm
           isOpen={isFormOpen}
           setIsOpen={setIsFormOpen}
           employee={currentUserDetails} 
-          onSubmit={handleFormSubmit}
+          onSubmit={handleFormSubmit as any}
           supervisors={supervisorsForForm}
           canEditAllFields={loggedInUser?.role === 'ADMIN'} 
           isSubmitting={isSubmitting}
@@ -214,5 +291,3 @@ export default function MyProfilePage() {
     </div>
   );
 }
-
-    

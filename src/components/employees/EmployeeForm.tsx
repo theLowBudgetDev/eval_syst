@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { AppUser, UserRoleType } from "@/types";
-import { Loader2, FileUp } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const NO_SUPERVISOR_VALUE = "--NONE--"; 
@@ -40,6 +40,7 @@ const employeeFormSchema = z.object({
   supervisorId: z.string().optional().nullable(),
   avatarUrl: z.string().url("Invalid URL for avatar, ensure it includes http(s)://").optional().or(z.literal('')).nullable(),
   avatarFile: z.instanceof(File).optional().nullable(),
+  password: z.string().min(8, "Password must be at least 8 characters").optional().or(z.literal('')),
 });
 
 type EmployeeFormData = z.infer<typeof employeeFormSchema>;
@@ -48,7 +49,7 @@ interface EmployeeFormProps {
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   employee?: AppUser | null;
-  onSubmit: (data: AppUser, isEditing: boolean, avatarFile?: File | null) => Promise<void>;
+  onSubmit: (data: Partial<AppUser> & { password?: string }, isEditing: boolean, avatarFile?: File | null) => Promise<void>;
   supervisors: AppUser[];
   canEditAllFields?: boolean;
   isSubmitting: boolean;
@@ -67,7 +68,7 @@ export function EmployeeForm({
   const isEditingSelf = !!employee && employee.id === loggedInUser?.id;
   const [selectedAvatarFile, setSelectedAvatarFile] = React.useState<File | null>(null);
   const avatarFileRef = React.useRef<HTMLInputElement>(null);
-
+  const [showPassword, setShowPassword] = React.useState(false);
 
   const {
     control,
@@ -89,6 +90,7 @@ export function EmployeeForm({
       supervisorId: NO_SUPERVISOR_VALUE,
       avatarUrl: "",
       avatarFile: null,
+      password: "",
     },
   });
 
@@ -111,6 +113,7 @@ export function EmployeeForm({
           supervisorId: employee.supervisorId || NO_SUPERVISOR_VALUE,
           avatarUrl: employee.avatarUrl || "",
           avatarFile: null,
+          password: "",
         });
       } else {
         reset({
@@ -123,34 +126,34 @@ export function EmployeeForm({
           supervisorId: NO_SUPERVISOR_VALUE,
           avatarUrl: "",
           avatarFile: null,
+          password: "",
         });
       }
     }
   }, [employee, reset, isOpen]);
 
   const handleFormInternalSubmit = (data: EmployeeFormData) => {
-    // TODO: Implement actual file upload logic here.
-    // 1. If data.avatarFile is present, upload it to a service (e.g., Firebase Storage, S3).
-    // 2. Get the downloadable URL from the upload service.
-    // 3. Set submissionData.avatarUrl = newUrl;
-    // For now, we are passing the selectedAvatarFile to the onSubmit handler.
-    // The onSubmit handler in the parent page will need to manage the upload
-    // and update the avatarUrl before making the API call if it's implemented there.
-    // If not, the API will receive the old or an empty avatarUrl.
-
-    const submissionData: AppUser = {
-      id: employee?.id || "",
+    if (!employee && !data.password) {
+      alert("Password is required for new employees.");
+      return;
+    }
+    
+    const submissionData: Partial<AppUser> & { password?: string } = {
+      id: employee?.id || undefined,
       name: data.name,
       email: data.email,
       department: data.department,
       position: data.position,
       hireDate: data.hireDate,
       role: data.role,
-      // If a new file is selected, avatarUrl will be updated after upload by the parent.
-      // Otherwise, use the existing one (which could be empty if no file was ever uploaded).
-      avatarUrl: selectedAvatarFile ? "" : data.avatarUrl || null, // Placeholder for URL from upload
+      avatarUrl: selectedAvatarFile ? "" : data.avatarUrl || null,
       supervisorId: data.supervisorId === NO_SUPERVISOR_VALUE ? null : data.supervisorId,
     };
+
+    if (!employee && data.password) {
+      submissionData.password = data.password;
+    }
+
     onSubmit(submissionData, !!employee, selectedAvatarFile);
   };
 
@@ -183,6 +186,25 @@ export function EmployeeForm({
               {errors.email && <p className="text-sm text-destructive mt-1">{errors.email.message}</p>}
             </div>
           </div>
+
+          {!employee && (
+            <div>
+                <Label htmlFor="password">Password</Label>
+                <div className="relative">
+                    <Input id="password" type={showPassword ? 'text' : 'password'} {...register("password")} className="mt-1 pr-10" />
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute inset-y-0 right-0 h-full px-3 text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowPassword(!showPassword)}
+                    >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                </div>
+                {errors.password && <p className="text-sm text-destructive mt-1">{errors.password.message}</p>}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -273,7 +295,6 @@ export function EmployeeForm({
                 const file = e.target.files?.[0] || null;
                 setSelectedAvatarFile(file);
                 setValue("avatarFile", file, { shouldValidate: true });
-                 // Clear avatarUrl if a file is selected, actual URL will come from upload
                 if (file) setValue("avatarUrl", "");
               }}
               disabled={!avatarFieldChangeAllowed || isSubmitting}
@@ -308,5 +329,3 @@ export function EmployeeForm({
     </Dialog>
   );
 }
-
-    
