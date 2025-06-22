@@ -2,13 +2,12 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { headers } from 'next/headers';
-import type { UserRoleType } from '@/types';
+import type { UserRoleType, AuditActionType } from '@/types';
 
-// Helper function to get current user (placeholder - replace with your actual auth logic)
 async function getCurrentUser(): Promise<{ id: string; role: UserRoleType } | null> {
   const userId = headers().get('X-User-Id');
   const userRole = headers().get('X-User-Role') as UserRoleType;
-  if (userId && userRole === 'ADMIN') { // Only ADMIN can access audit logs
+  if (userId && userRole === 'ADMIN') {
     return { id: userId, role: userRole };
   }
   return null;
@@ -21,7 +20,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: 'Forbidden: You do not have permission to view audit logs.' }, { status: 403 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const actionFilter = searchParams.get('action') as AuditActionType | null;
+
+    const whereClause: any = {};
+    if (actionFilter) {
+        whereClause.action = actionFilter;
+    }
+
     const auditLogs = await prisma.auditLog.findMany({
+      where: whereClause,
       orderBy: {
         timestamp: 'desc',
       },
@@ -30,7 +38,7 @@ export async function GET(request: Request) {
           select: { id: true, name: true, email: true },
         },
       },
-      take: 100, // Limit to recent 100 logs for performance in this basic version
+      take: 100,
     });
 
     return NextResponse.json(auditLogs);

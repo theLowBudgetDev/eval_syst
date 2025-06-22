@@ -5,25 +5,56 @@ import * as React from "react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DatabaseBackup, Download, Loader2 } from "lucide-react";
+import { DatabaseBackup, Download, Loader2, History } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
+import type { AuditLog } from "@/types";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DataBackupPage() {
   const { user, isLoading: authIsLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const [isBackingUp, setIsBackingUp] = React.useState(false);
+  const [backupHistory, setBackupHistory] = React.useState<AuditLog[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = React.useState(true);
+
+  const fetchHistory = React.useCallback(async () => {
+    if (!user || user.role !== 'ADMIN') return;
+    setIsLoadingHistory(true);
+    try {
+      const headers = new Headers();
+      headers.append('X-User-Id', user.id);
+      headers.append('X-User-Role', user.role);
+      const res = await fetch("/api/admin/audit-logs?action=DATA_BACKUP_SUCCESS", { headers });
+      if (!res.ok) throw new Error("Failed to fetch backup history");
+      setBackupHistory(await res.json());
+    } catch (error) {
+      toast({ title: "Error Fetching History", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, [user, toast]);
 
   React.useEffect(() => {
     if (!authIsLoading && user && user.role !== 'ADMIN') {
       router.push('/login');
     } else if (!authIsLoading && !user) {
       router.push('/login');
+    } else if (user?.role === 'ADMIN') {
+      fetchHistory();
     }
-  }, [user, authIsLoading, router]);
+  }, [user, authIsLoading, router, fetchHistory]);
 
   const handleStartBackup = async () => {
     if (!user) return;
@@ -51,7 +82,7 @@ export default function DataBackupPage() {
       a.href = url;
       a.download = `evaltrack_backup_${format(new Date(), "yyyy-MM-dd_HH-mm-ss")}.json`;
       document.body.appendChild(a);
-      a.click();
+a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
@@ -59,6 +90,7 @@ export default function DataBackupPage() {
         title: "Backup Successful",
         description: "Your data backup has been downloaded.",
       });
+      fetchHistory(); // Refresh history after successful backup
 
     } catch (error) {
        toast({
@@ -82,32 +114,66 @@ export default function DataBackupPage() {
         description="Manage system data backups and exports."
       />
 
-      <Card className="shadow-lg border-border">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <DatabaseBackup className="h-6 w-6 text-primary"/>
-            System Data Backup
-          </CardTitle>
-          <CardDescription>
-            Create and download a JSON backup of your core application data. Regular backups are recommended.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-muted-foreground">
-            Click the button below to generate a backup file containing users, goals, evaluations, and other key records.
-          </p>
-          <Button onClick={handleStartBackup} disabled={isBackingUp}>
-            {isBackingUp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-            {isBackingUp ? "Generating Backup..." : "Start New Backup"}
-          </Button>
-          <div className="mt-6">
-            <h3 className="font-semibold text-lg mb-2">Previous Backups</h3>
-            <p className="text-sm text-muted-foreground">
-              A list of previous backups and their download links would appear here. This feature is not yet implemented.
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="shadow-lg border-border">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DatabaseBackup className="h-6 w-6 text-primary"/>
+              Create New Backup
+            </CardTitle>
+            <CardDescription>
+              Create and download a JSON backup of your core application data. Regular backups are recommended.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-muted-foreground">
+              Click the button below to generate a backup file containing users, goals, evaluations, and other key records.
             </p>
-          </div>
-        </CardContent>
-      </Card>
+            <Button onClick={handleStartBackup} disabled={isBackingUp}>
+              {isBackingUp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+              {isBackingUp ? "Generating Backup..." : "Start New Backup"}
+            </Button>
+          </CardContent>
+        </Card>
+        
+        <Card className="shadow-lg border-border">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-6 w-6 text-primary"/>
+              Backup History
+            </CardTitle>
+            <CardDescription>
+              A log of successfully created data backups.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoadingHistory ? (
+              <div className="space-y-2">
+                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full"/>)}
+              </div>
+            ) : backupHistory.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Performed By</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {backupHistory.map(log => (
+                    <TableRow key={log.id}>
+                      <TableCell>{format(parseISO(log.timestamp), "MMM d, yyyy, HH:mm")}</TableCell>
+                      <TableCell>{log.user?.name || "Unknown Admin"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-8">No backup history found.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

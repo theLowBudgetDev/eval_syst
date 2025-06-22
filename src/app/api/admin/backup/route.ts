@@ -2,21 +2,25 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { headers } from 'next/headers';
-import type { UserRoleType } from '@/types';
+import type { UserRoleType, AuditActionType } from '@/types';
+import { format } from 'date-fns';
 
-// Helper to check for Admin role
-async function isAdmin(): Promise<boolean> {
+async function getCurrentUser(): Promise<{ id: string; role: UserRoleType } | null> {
   const userId = headers().get('X-User-Id');
   const userRole = headers().get('X-User-Role') as UserRoleType;
-  return !!(userId && userRole === 'ADMIN');
+  if (userId && userRole === 'ADMIN') {
+    return { id: userId, role: userRole };
+  }
+  return null;
 }
 
 export async function GET(request: Request) {
-  try {
-    if (!(await isAdmin())) {
-      return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
-    }
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+  }
 
+  try {
     const backupData = {
       users: await prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, department: true, position: true, hireDate: true, supervisorId: true } }),
       goals: await prisma.goal.findMany(),
@@ -28,12 +32,29 @@ export async function GET(request: Request) {
       autoMessageTriggers: await prisma.autoMessageTrigger.findMany(),
     };
     
-    // Prisma handles Date to ISO string conversion, so no manual serialization is needed for dates.
+    await prisma.auditLog.create({
+      data: {
+        userId: currentUser.id,
+        action: "DATA_BACKUP_SUCCESS" as AuditActionType,
+        details: JSON.stringify({ file: `evaltrack_backup_${format(new Date(), "yyyy-MM-dd")}.json` }),
+      }
+    });
 
     return NextResponse.json(backupData);
 
   } catch (error: any) {
     console.error("Error creating data backup:", error);
+    try {
+        await prisma.auditLog.create({
+          data: {
+            userId: currentUser.id,
+            action: "DATA_BACKUP_FAILURE" as AuditActionType,
+            details: JSON.stringify({ error: error.message }),
+          }
+        });
+    } catch (auditError) {
+        console.error("Failed to log backup failure:", auditError);
+    }
     return NextResponse.json({ message: 'Failed to create backup', error: error.message }, { status: 500 });
   }
 }
