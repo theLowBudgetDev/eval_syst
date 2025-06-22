@@ -24,6 +24,7 @@ import { FileText, CalendarCheck, PlusCircle, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 
 
 interface NewWorkOutputData {
@@ -92,13 +93,13 @@ export default function MyProgressPage() {
 
     let finalFileUrl = newWorkOutput.fileUrl;
     if (newWorkOutput.file) {
-      // ** Placeholder for actual file upload **
-      // 1. Upload `newWorkOutput.file` to a service.
-      // 2. Get the downloadable URL.
-      // 3. `finalFileUrl = newUrlFromUploadService;`
-      toast({ title: "File Selected", description: `File "${newWorkOutput.file.name}" would be uploaded. Using provided URL or empty for now.` });
-      // For demo, if a file is selected, we might clear the URL field or use a placeholder from upload service.
-      // finalFileUrl = ""; // Or the URL from your upload service
+      try {
+        finalFileUrl = await toBase64(newWorkOutput.file);
+      } catch (error) {
+        toast({ title: "Avatar Upload Failed", description: "Could not read the selected image file.", variant: "destructive"});
+        setIsSubmittingWorkOutput(false);
+        return;
+      }
     }
 
     const payload: Omit<WorkOutput, 'id' | 'employee'> = {
@@ -293,7 +294,7 @@ export default function MyProgressPage() {
                              workOutputFileRef.current.value = "";
                         }
                     }}
-                    placeholder="https://example.com/link/to/file" 
+                    placeholder="https://placehold.co/link/to/file" 
                     disabled={isSubmittingWorkOutput || !!newWorkOutput.file}
                 />
               </div>
@@ -320,5 +321,13 @@ export default function MyProgressPage() {
     </div>
   );
 }
+
+const toBase64 = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+  });
 
     
