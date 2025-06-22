@@ -20,14 +20,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: 'Forbidden: You do not have permission to view notifications.' }, { status: 403 });
     }
 
-    const notifications = await prisma.notification.findMany({
+    const { searchParams } = new URL(request.url);
+    const noLimit = searchParams.get('no_limit') === 'true';
+
+    const findOptions: any = {
       where: {
         recipientId: currentUser.id,
       },
       orderBy: {
         createdAt: 'desc',
       },
-      take: 20, // Limit to the 20 most recent notifications
       include: {
         actor: {
           select: {
@@ -36,7 +38,13 @@ export async function GET(request: Request) {
           },
         },
       },
-    });
+    };
+
+    if (!noLimit) {
+      findOptions.take = 20; // Default limit for the bell dropdown
+    }
+
+    const notifications = await prisma.notification.findMany(findOptions);
 
     return NextResponse.json(notifications);
   } catch (error: any) {
