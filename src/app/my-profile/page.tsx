@@ -32,6 +32,13 @@ const passwordFormSchema = z.object({
 
 type PasswordFormData = z.infer<typeof passwordFormSchema>;
 
+const toBase64 = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+  });
 
 export default function MyProfilePage() {
   const { user: loggedInUser, isLoading: authIsLoading, login: updateAuthContextUser } = useAuth();
@@ -94,8 +101,13 @@ export default function MyProfilePage() {
     let finalAvatarUrl = employeeData.avatarUrl;
 
     if (avatarFile) {
-      // Placeholder for file upload
-      toast({ title: "File Selected", description: `File "${avatarFile.name}" would be uploaded here. This is a demo.` });
+      try {
+        finalAvatarUrl = await toBase64(avatarFile);
+      } catch (error) {
+        toast({ title: "Avatar Upload Failed", description: "Could not read the selected image file.", variant: "destructive"});
+        setIsSubmitting(false);
+        return;
+      }
     }
     
     const payload = { ...employeeData, avatarUrl: finalAvatarUrl };
@@ -282,7 +294,7 @@ export default function MyProfilePage() {
           isOpen={isFormOpen}
           setIsOpen={setIsFormOpen}
           employee={currentUserDetails} 
-          onSubmit={handleFormSubmit as any}
+          onSubmit={handleFormSubmit}
           supervisors={supervisorsForForm}
           canEditAllFields={loggedInUser?.role === 'ADMIN'} 
           isSubmitting={isSubmitting}
