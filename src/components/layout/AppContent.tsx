@@ -24,6 +24,7 @@ import {
   SheetContent,
   SheetHeader as ShadSheetHeader,
   SheetTitle as ShadSheetTitle,
+  SheetTrigger,
 } from '@/components/ui/sheet';
 import {
   AlertDialog,
