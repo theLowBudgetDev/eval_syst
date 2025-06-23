@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import type { AutoMessageTrigger, MessageEventType } from "@/types";
@@ -49,6 +49,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DataTablePagination } from "@/components/shared/DataTablePagination";
 
 const MESSAGE_EVENT_TYPES: MessageEventType[] = [
   "DEADLINE_APPROACHING",
@@ -88,6 +89,9 @@ export default function AutoMessagingPage() {
 
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [triggerToDelete, setTriggerToDelete] = React.useState<AutoMessageTrigger | null>(null);
+
+  const [page, setPage] = React.useState(1);
+  const [perPage, setPerPage] = React.useState(10);
 
   const fetchData = React.useCallback(async () => {
     setIsLoadingData(true);
@@ -131,7 +135,6 @@ export default function AutoMessagingPage() {
         const errorBody = await res.json().catch(() => ({ message: `Failed to update trigger status (status ${res.status}, non-JSON response)` }));
         throw new Error(errorBody.error || errorBody.message || `Failed to update trigger status (status ${res.status})`);
       }
-      // Update local state after successful API call
       setTriggers(prev => prev.map(t => t.id === trigger.id ? { ...t, isActive: updatedIsActive } : t));
       toast({ title: `Trigger ${updatedIsActive ? "Activated" : "Deactivated"}` });
     } catch (error) {
@@ -175,7 +178,7 @@ export default function AutoMessagingPage() {
         throw new Error(errorBody.error || errorBody.message || `Failed to save trigger (status ${res.status})`);
       }
       toast({ title: `Trigger ${editingTrigger ? 'Updated' : 'Added'}` });
-      fetchData(); // Re-fetch data to show changes
+      fetchData();
       setIsFormOpen(false);
     } catch (error) {
       toast({ title: "Error Saving Trigger", description: (error as Error).message, variant: "destructive" });
@@ -199,7 +202,7 @@ export default function AutoMessagingPage() {
         throw new Error(errorBody.error || errorBody.message || `Failed to delete trigger (status ${res.status})`);
       }
       toast({ title: "Trigger Deleted" });
-      fetchData(); // Re-fetch data
+      fetchData();
     } catch (error) {
       toast({ title: "Error Deleting Trigger", description: (error as Error).message, variant: "destructive" });
     } finally {
@@ -208,6 +211,8 @@ export default function AutoMessagingPage() {
       setTriggerToDelete(null);
     }
   };
+
+  const paginatedTriggers = triggers.slice((page - 1) * perPage, page * perPage);
   
   if (authIsLoading || !user || user.role !== 'ADMIN') {
     return (
@@ -241,75 +246,90 @@ export default function AutoMessagingPage() {
             Configure messages that are automatically sent based on specific system events.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {isLoadingData ? (
-             Array.from({length:3}).map((_, index) => (
-                <div key={index} className="flex items-center space-x-4 p-4 border-b">
-                    <Skeleton className="h-8 w-1/4" />
-                    <Skeleton className="h-8 w-1/2" />
-                    <Skeleton className="h-8 w-1/4" />
-                </div>
-             ))
-          ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[200px]">Event Name</TableHead>
-                <TableHead>Message Template Preview</TableHead>
-                <TableHead className="w-[150px]">Conditions</TableHead>
-                <TableHead className="w-[100px] text-center">Status</TableHead>
-                <TableHead className="text-right w-[150px]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {triggers.length > 0 ? triggers.map((trigger) => (
-                <TableRow key={trigger.id}>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                        <MessageSquareText className="h-4 w-4 text-muted-foreground"/>
-                        {trigger.eventName.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')}
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            {isLoadingData ? (
+               <div className="p-6">
+                  {Array.from({length:3}).map((_, index) => (
+                    <div key={index} className="flex items-center space-x-4 p-4 border-b">
+                        <Skeleton className="h-8 w-1/4" />
+                        <Skeleton className="h-8 w-1/2" />
+                        <Skeleton className="h-8 w-1/4" />
                     </div>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground truncate max-w-xs">
-                    "{trigger.messageTemplate.substring(0, 60)}{trigger.messageTemplate.length > 60 ? '...' : ''}"
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {trigger.daysBeforeEvent !== undefined && trigger.daysBeforeEvent !== null ? `${trigger.daysBeforeEvent} days before` : "General Event"}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {activeToggleLoading === trigger.id ? 
-                        <Loader2 className="h-5 w-5 animate-spin mx-auto" /> :
-                        <Switch
-                          checked={trigger.isActive}
-                          onCheckedChange={() => handleToggleActive(trigger)}
-                          aria-label={`Toggle ${trigger.eventName} trigger`}
-                          disabled={activeToggleLoading === trigger.id}
-                        />
-                    }
-                     <Badge variant={trigger.isActive ? "default" : "outline"} className="mt-1 block w-fit mx-auto">
-                        {trigger.isActive ? "Active" : "Inactive"}
-                     </Badge>
-                  </TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button variant="outline" size="icon" onClick={() => handleOpenForm(trigger)} disabled={isSubmitting || activeToggleLoading === trigger.id}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button variant="destructive" size="icon" onClick={() => handleDeleteRequest(trigger)} disabled={isDeleting || activeToggleLoading === trigger.id}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              )) : (
+                  ))}
+               </div>
+            ) : (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
-                    No automated message triggers configured yet.
-                    </TableCell>
+                  <TableHead className="w-[200px]">Event Name</TableHead>
+                  <TableHead>Message Template Preview</TableHead>
+                  <TableHead className="w-[150px]">Conditions</TableHead>
+                  <TableHead className="w-[100px] text-center">Status</TableHead>
+                  <TableHead className="text-right w-[150px]">Actions</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-          )}
+              </TableHeader>
+              <TableBody>
+                {paginatedTriggers.length > 0 ? paginatedTriggers.map((trigger) => (
+                  <TableRow key={trigger.id}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                          <MessageSquareText className="h-4 w-4 text-muted-foreground"/>
+                          {trigger.eventName.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground truncate max-w-xs">
+                      "{trigger.messageTemplate.substring(0, 60)}{trigger.messageTemplate.length > 60 ? '...' : ''}"
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {trigger.daysBeforeEvent !== undefined && trigger.daysBeforeEvent !== null ? `${trigger.daysBeforeEvent} days before` : "General Event"}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {activeToggleLoading === trigger.id ? 
+                          <Loader2 className="h-5 w-5 animate-spin mx-auto" /> :
+                          <Switch
+                            checked={trigger.isActive}
+                            onCheckedChange={() => handleToggleActive(trigger)}
+                            aria-label={`Toggle ${trigger.eventName} trigger`}
+                            disabled={activeToggleLoading === trigger.id}
+                          />
+                      }
+                       <Badge variant={trigger.isActive ? "default" : "outline"} className="mt-1 block w-fit mx-auto">
+                          {trigger.isActive ? "Active" : "Inactive"}
+                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button variant="outline" size="icon" onClick={() => handleOpenForm(trigger)} disabled={isSubmitting || activeToggleLoading === trigger.id}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="destructive" size="icon" onClick={() => handleDeleteRequest(trigger)} disabled={isDeleting || activeToggleLoading === trigger.id}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )) : (
+                  <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center">
+                      No automated message triggers configured yet.
+                      </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+            )}
+          </div>
         </CardContent>
+        {triggers.length > perPage && (
+          <CardFooter className="py-4 border-t">
+              <DataTablePagination
+                count={triggers.length}
+                page={page}
+                perPage={perPage}
+                setPage={setPage}
+                setPerPage={(value) => { setPerPage(value); setPage(1); }}
+              />
+          </CardFooter>
+        )}
       </Card>
 
       {isFormOpen && (
@@ -347,7 +367,11 @@ export default function AutoMessagingPage() {
                         id="trigger-days" 
                         type="number" 
                         value={formData.daysBeforeEvent === null || formData.daysBeforeEvent === undefined ? "" : formData.daysBeforeEvent} 
-                        onChange={e => setFormData({...formData, daysBeforeEvent: e.target.value === "" ? null : parseInt(e.target.value, 10)})} 
+                        onChange={e => {
+                          const value = e.target.value;
+                          const num = parseInt(value, 10);
+                          setFormData({...formData, daysBeforeEvent: isNaN(num) ? null : num });
+                        }}
                         disabled={isSubmitting}
                         placeholder="e.g., 7"
                     />

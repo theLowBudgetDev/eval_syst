@@ -22,7 +22,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Sheet,
   SheetContent,
-  SheetTrigger,
   SheetHeader as ShadSheetHeader,
   SheetTitle as ShadSheetTitle,
 } from '@/components/ui/sheet';
@@ -55,7 +54,7 @@ function RenderNavLinks({ role, onLinkClick }: { role: UserRoleType | null, onLi
           asChild
           className={isSubLink ? "text-sm pl-10" : ""}
           tooltip={link.label}
-          onClick={onLinkClick} // Close mobile sidebar on link click
+          onClick={onLinkClick}
         >
           <Link href={link.href}>
             <link.icon className="h-4 w-4" />
@@ -74,7 +73,6 @@ function RenderNavLinks({ role, onLinkClick }: { role: UserRoleType | null, onLi
   return <>{renderLinks(navLinks)}</>;
 }
 
-// Define LayoutRenderer as a separate component function
 function LayoutRenderer({
   user,
   logout,
@@ -88,7 +86,7 @@ function LayoutRenderer({
   setIsMobileSheetOpen: (open: boolean) => void,
   children: React.ReactNode
 }) {
-  const sidebarContext = useSidebar(); // Called safely within SidebarProvider's context
+  const sidebarContext = useSidebar();
   const { notifications, unreadCount, markAllAsRead } = useNotifications(user);
 
 
@@ -162,8 +160,8 @@ function LayoutRenderer({
                       <RenderNavLinks role={user?.role || null} onLinkClick={handleMobileLinkClick} />
                     </SidebarMenu>
                  </CustomSidebarContent>
-                  <CustomSidebarFooter className="p-2 mt-auto border-t border-sidebar-border">
-                     <Link href="/my-profile" className="flex items-center gap-2 p-1 rounded-md hover:bg-sidebar-accent" onClick={handleMobileLinkClick}>
+                  <CustomSidebarFooter className="p-2 mt-auto border-t border-sidebar-border space-y-2">
+                      <Link href="/my-profile" className="flex items-center gap-2 p-1 rounded-md hover:bg-sidebar-accent" onClick={handleMobileLinkClick}>
                         <Avatar className="h-8 w-8">
                           <AvatarImage src={user?.avatarUrl || undefined} alt={user?.name || "User"} />
                           <AvatarFallback>{user?.name ? user.name.substring(0, 2).toUpperCase() : "U"}</AvatarFallback>
@@ -173,15 +171,38 @@ function LayoutRenderer({
                           <p className="text-xs text-sidebar-foreground/70 truncate" title={user?.email}>{user?.email}</p>
                         </div>
                       </Link>
+                      <div className="flex items-center justify-between">
+                          <DarkModeToggle />
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm">
+                                <LogOut className="mr-2 h-4 w-4" /> Logout
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you sure you want to logout?</AlertDialogTitle>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={logout} className={buttonVariants({ variant: "destructive" })}>Logout</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                      </div>
                   </CustomSidebarFooter>
               </SheetContent>
             </Sheet>
             <div className="hidden md:block">
                <SidebarTrigger />
             </div>
+             <Link href="/" className="flex items-center gap-2 md:hidden">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-primary"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
+                <h1 className="font-bold text-lg font-headline">EvalTrack</h1>
+            </Link>
           </div>
 
-          <div className="flex items-center gap-1 md:gap-3">
+          <div className="hidden md:flex items-center gap-1 md:gap-3">
             <DarkModeToggle />
             <NotificationBell 
               notifications={notifications}
@@ -231,6 +252,15 @@ function LayoutRenderer({
               </AlertDialogContent>
             </AlertDialog>
           </div>
+          
+          <div className="flex items-center gap-1 md:hidden">
+              <NotificationBell 
+                notifications={notifications}
+                unreadCount={unreadCount}
+                onOpen={markAllAsRead}
+              />
+          </div>
+
         </header>
         <main className="flex-1 p-4 sm:p-6 lg:p-8 bg-background">
            {children}
@@ -278,7 +308,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
 
   return (
     <TooltipProvider>
-      <SidebarProvider defaultOpen={false}> {/* Sidebar closed by default */}
+      <SidebarProvider defaultOpen={false}>
         <LayoutRenderer
           user={user}
           logout={logout}

@@ -5,8 +5,9 @@ import { headers } from 'next/headers';
 import type { UserRoleType } from '@/types';
 
 async function getCurrentUser(): Promise<{ id: string; role: UserRoleType } | null> {
-  const userId = headers().get('X-User-Id');
-  const userRole = headers().get('X-User-Role') as UserRoleType;
+  const headerValues = headers();
+  const userId = headerValues.get('X-User-Id');
+  const userRole = headerValues.get('X-User-Role') as UserRoleType;
   if (userId && userRole) {
     return { id: userId, role: userRole };
   }

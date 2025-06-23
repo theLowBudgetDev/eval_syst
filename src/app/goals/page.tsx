@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -43,13 +43,13 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import type { Goal, GoalStatusType, AppUser } from "@/types";
-import { PlusCircle, Edit, Trash2, Loader2, Filter, Search } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Loader2, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DatePicker } from "@/components/ui/date-picker"; // Assuming you'll create this or use an existing one
+import { DataTablePagination } from "@/components/shared/DataTablePagination";
 
 const GOAL_STATUS_OPTIONS: GoalStatusType[] = ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "ON_HOLD", "CANCELLED"];
 
@@ -58,7 +58,7 @@ interface GoalFormData {
   description?: string;
   status: GoalStatusType;
   dueDate?: Date | null;
-  employeeId: string; // Only for Admin/Supervisor when creating for others
+  employeeId: string;
 }
 
 export default function GoalsPage() {
@@ -67,7 +67,7 @@ export default function GoalsPage() {
   const { toast } = useToast();
 
   const [goals, setGoals] = React.useState<Goal[]>([]);
-  const [allUsersForFilter, setAllUsersForFilter] = React.useState<AppUser[]>([]); // For Admin/Supervisor employee filter
+  const [allUsersForFilter, setAllUsersForFilter] = React.useState<AppUser[]>([]);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
   
   const [isFormOpen, setIsFormOpen] = React.useState(false);
@@ -75,7 +75,7 @@ export default function GoalsPage() {
   const [formData, setFormData] = React.useState<GoalFormData>({
     title: "",
     status: "NOT_STARTED",
-    employeeId: user?.id || "", // Default to self, admin/sup can change
+    employeeId: user?.id || "",
   });
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -85,15 +85,17 @@ export default function GoalsPage() {
 
   // Filters
   const [statusFilter, setStatusFilter] = React.useState<GoalStatusType | "all">("all");
-  const [employeeFilter, setEmployeeFilter] = React.useState<string>("all"); // 'all' or userId
+  const [employeeFilter, setEmployeeFilter] = React.useState<string>("all");
   const [searchTerm, setSearchTerm] = React.useState("");
+
+  const [page, setPage] = React.useState(1);
+  const [perPage, setPerPage] = React.useState(10);
 
 
   const fetchData = React.useCallback(async () => {
     if (!user) return;
     setIsLoadingData(true);
     try {
-      // For API calls, provide user ID and role via headers (or adapt your auth mechanism)
       const headers = new Headers();
       headers.append('X-User-Id', user.id);
       headers.append('X-User-Role', user.role);
@@ -106,7 +108,7 @@ export default function GoalsPage() {
       setGoals(await goalsRes.json());
 
       if (user.role === 'ADMIN' || user.role === 'SUPERVISOR') {
-        const usersRes = await fetch("/api/users", { headers }); // Admins/Supervisors might need list of users
+        const usersRes = await fetch("/api/users", { headers });
         if (!usersRes.ok) throw new Error("Failed to fetch users for filter");
         const usersData: AppUser[] = await usersRes.json();
         if (user.role === 'SUPERVISOR') {
@@ -152,7 +154,7 @@ export default function GoalsPage() {
         description: "",
         status: "NOT_STARTED",
         dueDate: null,
-        employeeId: user?.id || "", // Default to self if not admin/sup picking
+        employeeId: user?.id || "",
       });
     }
     setIsFormOpen(true);
@@ -173,8 +175,8 @@ export default function GoalsPage() {
 
     const payload = {
       ...formData,
-      dueDate: formData.dueDate ? formData.dueDate.toISOString().split('T')[0] : null, // Format as YYYY-MM-DD for API
-      employeeId: (user.role === 'ADMIN' || user.role === 'SUPERVISOR') ? formData.employeeId : user.id, // Employee can only set for self
+      dueDate: formData.dueDate ? formData.dueDate.toISOString().split('T')[0] : null,
+      employeeId: (user.role === 'ADMIN' || user.role === 'SUPERVISOR') ? formData.employeeId : user.id,
     };
 
     const url = editingGoal ? `/api/goals/${editingGoal.id}` : '/api/goals';
@@ -228,10 +230,10 @@ export default function GoalsPage() {
 
   const getStatusBadgeVariant = (status: GoalStatusType) => {
     switch (status) {
-      case 'COMPLETED': return 'default'; // Often green or primary
+      case 'COMPLETED': return 'default';
       case 'IN_PROGRESS': return 'secondary';
+      case 'ON_HOLD':
       case 'NOT_STARTED': return 'outline';
-      case 'ON_HOLD': return 'outline'; // Could be yellow-ish
       case 'CANCELLED': return 'destructive';
       default: return 'outline';
     }
@@ -246,6 +248,7 @@ export default function GoalsPage() {
     return matchesSearch && matchesStatus && matchesEmployee;
   });
 
+  const paginatedGoals = filteredGoals.slice((page - 1) * perPage, page * perPage);
 
   if (authIsLoading || !user) {
     return (
@@ -310,50 +313,65 @@ export default function GoalsPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          {isLoadingData ? (
-            Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full my-2" />)
-          ) : filteredGoals.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') && <TableHead>Employee</TableHead>}
-                  <TableHead>Status</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredGoals.map((goal) => (
-                  <TableRow key={goal.id}>
-                    <TableCell className="font-medium">{goal.title}</TableCell>
-                    {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') && (
-                        <TableCell>{goal.employee?.name || goal.employeeId}</TableCell>
-                    )}
-                    <TableCell>
-                      <Badge variant={getStatusBadgeVariant(goal.status)}>{goal.status.replace("_", " ")}</Badge>
-                    </TableCell>
-                    <TableCell>{goal.dueDate ? format(parseISO(goal.dueDate), "PP") : "N/A"}</TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button variant="outline" size="icon" onClick={() => handleOpenForm(goal)} disabled={isSubmitting || isDeleting}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="destructive" size="icon" onClick={() => handleDeleteRequest(goal)} disabled={isDeleting || isSubmitting}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            {isLoadingData ? (
+              <div className="p-6">
+                {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full my-2" />)}
+              </div>
+            ) : paginatedGoals.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Title</TableHead>
+                    {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') && <TableHead>Employee</TableHead>}
+                    <TableHead>Status</TableHead>
+                    <TableHead>Due Date</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <p className="text-muted-foreground py-4 text-center">
-                No goals found matching your criteria. {filteredGoals.length === 0 && goals.length > 0 && "Try adjusting your filters."}
-                {goals.length === 0 && "Get started by adding a new goal!"}
-            </p>
-          )}
+                </TableHeader>
+                <TableBody>
+                  {paginatedGoals.map((goal) => (
+                    <TableRow key={goal.id}>
+                      <TableCell className="font-medium">{goal.title}</TableCell>
+                      {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') && (
+                          <TableCell>{goal.employee?.name || goal.employeeId}</TableCell>
+                      )}
+                      <TableCell>
+                        <Badge variant={getStatusBadgeVariant(goal.status)}>{goal.status.replace(/_/g, " ")}</Badge>
+                      </TableCell>
+                      <TableCell>{goal.dueDate ? format(parseISO(goal.dueDate), "PP") : "N/A"}</TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <Button variant="outline" size="icon" onClick={() => handleOpenForm(goal)} disabled={isSubmitting || isDeleting}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="destructive" size="icon" onClick={() => handleDeleteRequest(goal)} disabled={isDeleting || isSubmitting}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="p-6 text-muted-foreground text-center">
+                  No goals found matching your criteria. {filteredGoals.length === 0 && goals.length > 0 && "Try adjusting your filters."}
+                  {goals.length === 0 && "Get started by adding a new goal!"}
+              </div>
+            )}
+          </div>
         </CardContent>
+        {filteredGoals.length > perPage && (
+          <CardFooter className="py-4 border-t">
+            <DataTablePagination
+              count={filteredGoals.length}
+              page={page}
+              perPage={perPage}
+              setPage={setPage}
+              setPerPage={(value) => { setPerPage(value); setPage(1); }}
+            />
+          </CardFooter>
+        )}
       </Card>
 
       {isFormOpen && (
@@ -372,7 +390,7 @@ export default function GoalsPage() {
                   <Select 
                     value={formData.employeeId} 
                     onValueChange={(value) => setFormData({...formData, employeeId: value})}
-                    disabled={isSubmitting || (editingGoal && user.role !== 'ADMIN')} // Only admin can reassign existing goal
+                    disabled={isSubmitting || (editingGoal && user.role !== 'ADMIN')}
                   >
                     <SelectTrigger id="goal-employee">
                       <SelectValue placeholder="Select an employee" />
@@ -397,7 +415,7 @@ export default function GoalsPage() {
                     <Select value={formData.status} onValueChange={value => setFormData({...formData, status: value as GoalStatusType})} disabled={isSubmitting}>
                         <SelectTrigger id="goal-status"><SelectValue placeholder="Select Status"/></SelectTrigger>
                         <SelectContent>
-                            {GOAL_STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{s.replace("_", " ")}</SelectItem>)}
+                            {GOAL_STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, " ")}</SelectItem>)}
                         </SelectContent>
                     </Select>
                 </div>

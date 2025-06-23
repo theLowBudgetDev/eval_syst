@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { PlusCircle, Edit, Trash2, Search, Filter, MoreHorizontal, Eye, Loader2, ArrowUpDown } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Search, MoreHorizontal, Eye, Loader2, ArrowUpDown } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/PageHeader";
 import {
@@ -31,7 +31,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,6 +52,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from "date-fns";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
+import { DataTablePagination } from "@/components/shared/DataTablePagination";
 
 type SortableKey = keyof Pick<AppUser, 'name' | 'email' | 'department' | 'position' | 'hireDate' | 'role'> | 'supervisorName';
 type SortDirection = 'asc' | 'desc';
@@ -94,6 +95,9 @@ export default function EmployeesPage() {
   const [isDetailDialogOpen, setIsDetailDialogOpen] = React.useState(false);
   const [viewingEmployee, setViewingEmployee] = React.useState<AppUser | null>(null);
   const { toast } = useToast();
+
+  const [page, setPage] = React.useState(1);
+  const [perPage, setPerPage] = React.useState(10);
 
   const uniqueDepartments = React.useMemo(() => {
     const depts = new Set(employees.map(emp => emp.department).filter(Boolean));
@@ -188,6 +192,8 @@ export default function EmployeesPage() {
         return 0;
     });
   }, [employees, searchTerm, user, departmentFilter, roleFilter, sortColumn, sortDirection]);
+  
+  const paginatedEmployees = filteredAndSortedEmployees.slice((page - 1) * perPage, page * perPage);
 
   const canPerformAdminActions = user?.role === 'ADMIN';
 
@@ -428,129 +434,142 @@ export default function EmployeesPage() {
       </div>
 
       <Card className="shadow-lg rounded-lg border-border">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {canPerformAdminActions && (
-                  <TableHead className="w-[50px]">
-                     <Checkbox
-                        checked={isAllSelected || (isIndeterminate ? 'indeterminate' : false)}
-                        onCheckedChange={handleSelectAll}
-                        aria-label="Select all rows"
-                        disabled={isLoadingData || !filteredAndSortedEmployees.length}
-                      />
-                  </TableHead>
-                )}
-                <TableHead className="w-[80px]">Avatar</TableHead>
-                <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('name')}>
-                  <div className="flex items-center gap-1">Name {renderSortIcon('name')}</div>
-                </TableHead>
-                <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('email')}>
-                   <div className="flex items-center gap-1">Email {renderSortIcon('email')}</div>
-                </TableHead>
-                <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('department')}>
-                   <div className="flex items-center gap-1">Department {renderSortIcon('department')}</div>
-                </TableHead>
-                <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('position')}>
-                   <div className="flex items-center gap-1">Position {renderSortIcon('position')}</div>
-                </TableHead>
-                <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('role')}>
-                   <div className="flex items-center gap-1">Role {renderSortIcon('role')}</div>
-                </TableHead>
-                <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('supervisorName')}>
-                   <div className="flex items-center gap-1">Supervisor {renderSortIcon('supervisorName')}</div>
-                </TableHead>
-                 <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('hireDate')}>
-                   <div className="flex items-center gap-1">Hire Date {renderSortIcon('hireDate')}</div>
-                </TableHead>
-                <TableHead className="text-right w-[100px]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoadingData ? (
-                  Array.from({length:5}).map((_, index) => (
-                      <TableRow key={`skeleton-${index}`}>
-                          {canPerformAdminActions && <TableCell><Skeleton className="h-5 w-5" /></TableCell>}
-                          <TableCell><Skeleton className="h-9 w-9 rounded-full" /></TableCell>
-                          <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                          <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                          <TableCell><Skeleton className="h-4 w-28" /></TableCell>
-                          <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                          <TableCell className="text-right"><Skeleton className="h-8 w-8" /></TableCell>
-                      </TableRow>
-                  ))
-              ) : filteredAndSortedEmployees.length > 0 ? (
-                filteredAndSortedEmployees.map((employee) => (
-                  <TableRow key={employee.id} data-state={selectedEmployeeIds.has(employee.id) ? "selected" : ""}>
-                    {canPerformAdminActions && (
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedEmployeeIds.has(employee.id)}
-                          onCheckedChange={(checked) => handleSelectRow(employee.id, !!checked)}
-                          aria-label={`Select row for ${employee.name}`}
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {canPerformAdminActions && (
+                    <TableHead className="w-[50px]">
+                       <Checkbox
+                          checked={isAllSelected || (isIndeterminate ? 'indeterminate' : false)}
+                          onCheckedChange={handleSelectAll}
+                          aria-label="Select all rows"
+                          disabled={isLoadingData || !filteredAndSortedEmployees.length}
                         />
+                    </TableHead>
+                  )}
+                  <TableHead className="w-[80px]">Avatar</TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('name')}>
+                    <div className="flex items-center gap-1">Name {renderSortIcon('name')}</div>
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('email')}>
+                     <div className="flex items-center gap-1">Email {renderSortIcon('email')}</div>
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('department')}>
+                     <div className="flex items-center gap-1">Department {renderSortIcon('department')}</div>
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('position')}>
+                     <div className="flex items-center gap-1">Position {renderSortIcon('position')}</div>
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('role')}>
+                     <div className="flex items-center gap-1">Role {renderSortIcon('role')}</div>
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('supervisorName')}>
+                     <div className="flex items-center gap-1">Supervisor {renderSortIcon('supervisorName')}</div>
+                  </TableHead>
+                   <TableHead className="cursor-pointer hover:bg-muted/50 group" onClick={() => handleSort('hireDate')}>
+                     <div className="flex items-center gap-1">Hire Date {renderSortIcon('hireDate')}</div>
+                  </TableHead>
+                  <TableHead className="text-right w-[100px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoadingData ? (
+                    Array.from({length:5}).map((_, index) => (
+                        <TableRow key={`skeleton-${index}`}>
+                            {canPerformAdminActions && <TableCell><Skeleton className="h-5 w-5" /></TableCell>}
+                            <TableCell><Skeleton className="h-9 w-9 rounded-full" /></TableCell>
+                            <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                            <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                            <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                            <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                            <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                            <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                            <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                            <TableCell className="text-right"><Skeleton className="h-8 w-8" /></TableCell>
+                        </TableRow>
+                    ))
+                ) : paginatedEmployees.length > 0 ? (
+                  paginatedEmployees.map((employee) => (
+                    <TableRow key={employee.id} data-state={selectedEmployeeIds.has(employee.id) ? "selected" : ""}>
+                      {canPerformAdminActions && (
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedEmployeeIds.has(employee.id)}
+                            onCheckedChange={(checked) => handleSelectRow(employee.id, !!checked)}
+                            aria-label={`Select row for ${employee.name}`}
+                          />
+                        </TableCell>
+                      )}
+                      <TableCell>
+                        <Avatar className="h-9 w-9">
+                          <AvatarImage src={employee.avatarUrl || undefined} alt={employee.name} data-ai-hint="person photo"/>
+                          <AvatarFallback>{employee.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                        </Avatar>
                       </TableCell>
-                    )}
-                    <TableCell>
-                      <Avatar className="h-9 w-9">
-                        <AvatarImage src={employee.avatarUrl || undefined} alt={employee.name} data-ai-hint="person photo"/>
-                        <AvatarFallback>{employee.name.substring(0, 2).toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                    </TableCell>
-                    <TableCell className="font-medium">{employee.name}</TableCell>
-                    <TableCell>{employee.email}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{employee.department}</Badge>
-                    </TableCell>
-                    <TableCell>{employee.position}</TableCell>
-                    <TableCell><Badge variant="outline">{employee.role.charAt(0) + employee.role.slice(1).toLowerCase()}</Badge></TableCell>
-                    <TableCell>{employee.supervisor?.name || "N/A"}</TableCell>
-                    <TableCell>{format(parseISO(employee.hireDate), "PP")}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span className="sr-only">Open menu</span>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => handleViewDetails(employee)}>
-                             <Eye className="mr-2 h-4 w-4" /> View Details
-                          </DropdownMenuItem>
-                          {(canPerformAdminActions || (user?.role === 'SUPERVISOR' && user.id === employee.id)) && (
-                              <DropdownMenuItem onClick={() => handleEditEmployee(employee)}>
-                                <Edit className="mr-2 h-4 w-4" /> Edit
-                              </DropdownMenuItem>
-                          )}
-                          {canPerformAdminActions && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteEmployee(employee)}>
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <TableCell className="font-medium">{employee.name}</TableCell>
+                      <TableCell>{employee.email}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{employee.department}</Badge>
+                      </TableCell>
+                      <TableCell>{employee.position}</TableCell>
+                      <TableCell><Badge variant="outline">{employee.role.charAt(0) + employee.role.slice(1).toLowerCase()}</Badge></TableCell>
+                      <TableCell>{employee.supervisor?.name || "N/A"}</TableCell>
+                      <TableCell>{format(parseISO(employee.hireDate), "PP")}</TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <span className="sr-only">Open menu</span>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => handleViewDetails(employee)}>
+                               <Eye className="mr-2 h-4 w-4" /> View Details
+                            </DropdownMenuItem>
+                            {(canPerformAdminActions || (user?.role === 'SUPERVISOR' && user.id === employee.id)) && (
+                                <DropdownMenuItem onClick={() => handleEditEmployee(employee)}>
+                                  <Edit className="mr-2 h-4 w-4" /> Edit
+                                </DropdownMenuItem>
+                            )}
+                            {canPerformAdminActions && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteEmployee(employee)}>
+                                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={canPerformAdminActions ? 10 : 9} className="h-24 text-center text-muted-foreground">
+                      No employees found matching your filters.
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={canPerformAdminActions ? 10 : 9} className="h-24 text-center text-muted-foreground">
-                    No employees found matching your filters.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+        {filteredAndSortedEmployees.length > perPage && (
+          <CardFooter className="py-4 border-t">
+              <DataTablePagination
+                count={filteredAndSortedEmployees.length}
+                page={page}
+                perPage={perPage}
+                setPage={setPage}
+                setPerPage={(value) => { setPerPage(value); setPage(1); }}
+              />
+          </CardFooter>
+        )}
       </Card>
 
       {isFormOpen && (user?.role === 'ADMIN' || (editingEmployee && editingEmployee.id === user?.id)) && (

@@ -31,7 +31,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import type { AppUser } from "@/types";
 import { UserPlus, UserCheck, Edit, Search, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -39,6 +39,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DataTablePagination } from "@/components/shared/DataTablePagination";
 
 const NO_SUPERVISOR_VALUE = "--NONE--";
 
@@ -56,6 +57,9 @@ export default function SupervisorAssignmentsPage() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = React.useState<Set<string>>(new Set());
   const [isBatchAssignDialogOpen, setIsBatchAssignDialogOpen] = React.useState(false);
+  
+  const [page, setPage] = React.useState(1);
+  const [perPage, setPerPage] = React.useState(10);
 
   const { toast } = useToast();
 
@@ -161,6 +165,8 @@ export default function SupervisorAssignmentsPage() {
     (emp.supervisor?.name && emp.supervisor.name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
   
+  const paginatedEmployees = filteredEmployees.slice((page - 1) * perPage, page * perPage);
+
   const handleSelectAll = (checked: boolean | 'indeterminate') => {
     if (checked === true) {
       setSelectedEmployeeIds(new Set(filteredEmployees.map(emp => emp.id)));
@@ -215,61 +221,76 @@ export default function SupervisorAssignmentsPage() {
       </div>
 
       <Card className="shadow-lg rounded-lg border-border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[50px]">
-                <Checkbox
-                    checked={isAllSelected || (isIndeterminate ? 'indeterminate' : false)}
-                    onCheckedChange={handleSelectAll}
-                    aria-label="Select all rows"
-                    disabled={filteredEmployees.length === 0}
-                />
-              </TableHead>
-              <TableHead>Employee Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Department</TableHead>
-              <TableHead>Current Supervisor</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredEmployees.length > 0 ? (
-              filteredEmployees.map((employee) => (
-              <TableRow key={employee.id} data-state={selectedEmployeeIds.has(employee.id) && "selected"}>
-                <TableCell>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px]">
                     <Checkbox
-                        checked={selectedEmployeeIds.has(employee.id)}
-                        onCheckedChange={(checked) => handleSelectRow(employee.id, !!checked)}
-                        aria-label={`Select row for ${employee.name}`}
+                        checked={isAllSelected || (isIndeterminate ? 'indeterminate' : false)}
+                        onCheckedChange={handleSelectAll}
+                        aria-label="Select all rows"
+                        disabled={filteredEmployees.length === 0}
                     />
-                </TableCell>
-                <TableCell className="font-medium">{employee.name}</TableCell>
-                <TableCell>{employee.email}</TableCell>
-                <TableCell><Badge variant="secondary">{employee.department}</Badge></TableCell>
-                <TableCell>
-                  {employee.supervisor?.name ? (
-                    <div className="flex items-center gap-2">
-                      <UserCheck className="h-4 w-4 text-green-500" />
-                      {employee.supervisor.name}
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground">Not Assigned</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button variant="outline" size="sm" onClick={() => handleOpenAssignDialog(employee)}>
-                    <Edit className="mr-2 h-4 w-4" />
-                    {employee.supervisorId ? "Change" : "Assign"}
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))
-          ) : (
-            <TableRow><TableCell colSpan={6} className="h-24 text-center">No employees found.</TableCell></TableRow>
-          )}
-          </TableBody>
-        </Table>
+                  </TableHead>
+                  <TableHead>Employee Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Current Supervisor</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedEmployees.length > 0 ? (
+                  paginatedEmployees.map((employee) => (
+                  <TableRow key={employee.id} data-state={selectedEmployeeIds.has(employee.id) && "selected"}>
+                    <TableCell>
+                        <Checkbox
+                            checked={selectedEmployeeIds.has(employee.id)}
+                            onCheckedChange={(checked) => handleSelectRow(employee.id, !!checked)}
+                            aria-label={`Select row for ${employee.name}`}
+                        />
+                    </TableCell>
+                    <TableCell className="font-medium">{employee.name}</TableCell>
+                    <TableCell>{employee.email}</TableCell>
+                    <TableCell><Badge variant="secondary">{employee.department}</Badge></TableCell>
+                    <TableCell>
+                      {employee.supervisor?.name ? (
+                        <div className="flex items-center gap-2">
+                          <UserCheck className="h-4 w-4 text-green-500" />
+                          {employee.supervisor.name}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">Not Assigned</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm" onClick={() => handleOpenAssignDialog(employee)}>
+                        <Edit className="mr-2 h-4 w-4" />
+                        {employee.supervisorId ? "Change" : "Assign"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow><TableCell colSpan={6} className="h-24 text-center">No employees found.</TableCell></TableRow>
+              )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+        {filteredEmployees.length > perPage && (
+            <CardFooter className="py-4 border-t">
+              <DataTablePagination
+                count={filteredEmployees.length}
+                page={page}
+                perPage={perPage}
+                setPage={setPage}
+                setPerPage={(value) => { setPerPage(value); setPage(1); }}
+              />
+            </CardFooter>
+        )}
       </Card>
 
       {/* Single Edit Dialog */}

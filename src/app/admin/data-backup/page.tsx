@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DatabaseBackup, Download, Loader2, History } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DataTablePagination } from "@/components/shared/DataTablePagination";
 
 export default function DataBackupPage() {
   const { user, isLoading: authIsLoading } = useAuth();
@@ -28,6 +29,9 @@ export default function DataBackupPage() {
   const [isBackingUp, setIsBackingUp] = React.useState(false);
   const [backupHistory, setBackupHistory] = React.useState<AuditLog[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = React.useState(true);
+
+  const [page, setPage] = React.useState(1);
+  const [perPage, setPerPage] = React.useState(5);
 
   const fetchHistory = React.useCallback(async () => {
     if (!user || user.role !== 'ADMIN') return;
@@ -82,7 +86,7 @@ export default function DataBackupPage() {
       a.href = url;
       a.download = `evaltrack_backup_${format(new Date(), "yyyy-MM-dd_HH-mm-ss")}.json`;
       document.body.appendChild(a);
-a.click();
+      a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
@@ -102,6 +106,8 @@ a.click();
       setIsBackingUp(false);
     }
   };
+
+  const paginatedHistory = backupHistory.slice((page - 1) * perPage, page * perPage);
 
   if (authIsLoading || (!authIsLoading && user && user.role !== 'ADMIN')) {
     return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
@@ -146,32 +152,45 @@ a.click();
               A log of successfully created data backups.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            {isLoadingHistory ? (
-              <div className="space-y-2">
-                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full"/>)}
-              </div>
-            ) : backupHistory.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Performed By</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {backupHistory.map(log => (
-                    <TableRow key={log.id}>
-                      <TableCell>{format(parseISO(log.timestamp), "MMM d, yyyy, HH:mm")}</TableCell>
-                      <TableCell>{log.user?.name || "Unknown Admin"}</TableCell>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              {isLoadingHistory ? (
+                <div className="space-y-2 p-6">
+                  {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full"/>)}
+                </div>
+              ) : paginatedHistory.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Performed By</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-8">No backup history found.</p>
-            )}
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedHistory.map(log => (
+                      <TableRow key={log.id}>
+                        <TableCell>{format(parseISO(log.timestamp), "MMM d, yyyy, HH:mm")}</TableCell>
+                        <TableCell>{log.user?.name || "Unknown Admin"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-8 px-6">No backup history found.</p>
+              )}
+            </div>
           </CardContent>
+          {backupHistory.length > perPage && (
+            <CardFooter className="py-4 border-t">
+              <DataTablePagination
+                count={backupHistory.length}
+                page={page}
+                perPage={perPage}
+                setPage={setPage}
+                setPerPage={(value) => { setPerPage(value); setPage(1); }}
+              />
+            </CardFooter>
+          )}
         </Card>
       </div>
     </div>

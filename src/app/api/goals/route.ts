@@ -2,21 +2,15 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import type { Goal, GoalStatusType, UserRoleType } from '@/types';
-import { headers } from 'next/headers'; // Assuming you have a way to get current user from session/token
+import { headers } from 'next/headers';
 
-// Helper function to get current user (placeholder - replace with your actual auth logic)
+// Helper function to get current user
 async function getCurrentUser(): Promise<{ id: string; role: UserRoleType } | null> {
-  // In a real app, you'd get this from a session, token, or other auth mechanism
-  // For this example, we'll extract it from a custom header if provided, or return null
   const userId = headers().get('X-User-Id');
   const userRole = headers().get('X-User-Role') as UserRoleType;
   if (userId && userRole) {
     return { id: userId, role: userRole };
   }
-  // Fallback or mock for testing if headers are not set (REMOVE FOR PRODUCTION)
-  // return { id: "emp01", role: "EMPLOYEE"}; 
-  // return { id: "sup01", role: "SUPERVISOR"};
-  // return { id: "admin01", role: "ADMIN"};
   return null;
 }
 
@@ -101,15 +95,12 @@ export async function POST(request: Request) {
     }
 
     // Permission check:
-    // Admin can create for anyone.
-    // Supervisor can create for themselves or their team members.
-    // Employee can only create for themselves.
-    let effectiveEmployeeId = employeeId;
+    const isFeedbackRequest = title.startsWith('Feedback Request from');
     if (currentUser.role === 'EMPLOYEE') {
-        if (employeeId !== currentUser.id) {
-            return NextResponse.json({ message: 'Forbidden: You can only create goals for yourself.' }, { status: 403 });
+        const userFromDb = await prisma.user.findUnique({ where: { id: currentUser.id } });
+        if (employeeId !== currentUser.id && !(isFeedbackRequest && employeeId === userFromDb?.supervisorId)) {
+            return NextResponse.json({ message: 'Forbidden: You can only create goals for yourself or request feedback from your supervisor.' }, { status: 403 });
         }
-        effectiveEmployeeId = currentUser.id;
     } else if (currentUser.role === 'SUPERVISOR') {
         if (employeeId !== currentUser.id) { // If supervisor is creating for someone else
             const targetEmployee = await prisma.user.findUnique({ where: { id: employeeId }});
@@ -117,21 +108,15 @@ export async function POST(request: Request) {
                  return NextResponse.json({ message: 'Forbidden: You can only create goals for your team members or yourself.' }, { status: 403 });
             }
         }
-         // If creating for self, employeeId is already currentUser.id
     }
     // Admin has no restrictions on employeeId
 
-
-    let supervisorForGoal: string | null = null;
-    if (currentUser.role === 'SUPERVISOR' && effectiveEmployeeId !== currentUser.id) {
-        // If a supervisor is creating a goal for their direct report, assign the supervisor.
+    const targetUserForGoal = await prisma.user.findUnique({ where: { id: employeeId }});
+    let supervisorForGoal: string | null = targetUserForGoal?.supervisorId || null;
+    
+    // if a supervisor creates a goal for one of their team, they are the supervisor for that goal
+    if (currentUser.role === 'SUPERVISOR' && targetUserForGoal?.supervisorId === currentUser.id) {
         supervisorForGoal = currentUser.id;
-    } else if (currentUser.role === 'ADMIN' && effectiveEmployeeId !== currentUser.id) {
-        // If an admin is creating a goal for someone, check if that person has a supervisor.
-        const targetUser = await prisma.user.findUnique({ where: {id: effectiveEmployeeId }});
-        if (targetUser?.supervisorId) {
-            supervisorForGoal = targetUser.supervisorId;
-        }
     }
 
 
@@ -141,20 +126,20 @@ export async function POST(request: Request) {
         description,
         status: status as GoalStatusType,
         dueDate: dueDate ? new Date(dueDate) : null,
-        employeeId: effectiveEmployeeId,
+        employeeId: employeeId,
         supervisorId: supervisorForGoal, 
       },
     });
 
     // Create a notification if someone else created the goal for the employee
-    if (currentUser.id !== effectiveEmployeeId) {
-        const message = title.startsWith('Feedback Request from')
+    if (currentUser.id !== employeeId) {
+        const message = isFeedbackRequest
             ? `sent you a feedback request.`
             : `assigned you a new goal: "${newGoal.title.substring(0, 30)}..."`;
 
         await prisma.notification.create({
             data: {
-                recipientId: effectiveEmployeeId,
+                recipientId: employeeId,
                 actorId: currentUser.id,
                 message: message,
                 link: '/goals',

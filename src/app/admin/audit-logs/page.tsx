@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import type { AuditLog } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { History, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DataTablePagination } from "@/components/shared/DataTablePagination";
 
 export default function AuditLogsPage() {
   const { user, isLoading: authIsLoading } = useAuth();
@@ -29,6 +30,9 @@ export default function AuditLogsPage() {
 
   const [auditLogs, setAuditLogs] = React.useState<AuditLog[]>([]);
   const [isLoadingData, setIsLoadingData] = React.useState(true);
+
+  const [page, setPage] = React.useState(1);
+  const [perPage, setPerPage] = React.useState(10);
 
   const fetchData = React.useCallback(async () => {
     if (!user || user.role !== 'ADMIN') return;
@@ -63,6 +67,8 @@ export default function AuditLogsPage() {
       router.push('/login');
     }
   }, [user, authIsLoading, router, fetchData]);
+  
+  const paginatedLogs = auditLogs.slice((page - 1) * perPage, page * perPage);
 
   if (authIsLoading || (!isLoadingData && user?.role !== 'ADMIN')) {
     return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
@@ -88,42 +94,57 @@ export default function AuditLogsPage() {
             Shows recent actions performed within the system. (Currently displays latest 100 entries).
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {isLoadingData ? (
-            Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-10 w-full my-1.5 rounded" />)
-          ) : auditLogs.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[180px]">Timestamp</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Target Type</TableHead>
-                  <TableHead>Target ID</TableHead>
-                  <TableHead>Details</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {auditLogs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell>{format(parseISO(log.timestamp), "MMM d, yyyy, HH:mm:ss")}</TableCell>
-                    <TableCell><Badge variant="secondary">{log.action.replace(/_/g, ' ')}</Badge></TableCell>
-                    <TableCell>{log.user?.name || (log.userId ? `User (${log.userId.substring(0,8)}...)` : "System")}</TableCell>
-                    <TableCell>{log.targetType || "N/A"}</TableCell>
-                    <TableCell className="truncate max-w-[100px]">{log.targetId || "N/A"}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground truncate max-w-[200px]">
-                      {log.details ? (typeof log.details === 'string' ? log.details : JSON.stringify(log.details)) : "N/A"}
-                    </TableCell>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            {isLoadingData ? (
+              <div className="p-6">
+                {Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-10 w-full my-1.5 rounded" />)}
+              </div>
+            ) : paginatedLogs.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[180px]">Timestamp</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>User</TableHead>
+                    <TableHead>Target Type</TableHead>
+                    <TableHead>Target ID</TableHead>
+                    <TableHead>Details</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="text-center py-10">
-              <p className="text-muted-foreground">No audit logs found.</p>
-            </div>
-          )}
+                </TableHeader>
+                <TableBody>
+                  {paginatedLogs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell>{format(parseISO(log.timestamp), "MMM d, yyyy, HH:mm:ss")}</TableCell>
+                      <TableCell><Badge variant="secondary">{log.action.replace(/_/g, ' ')}</Badge></TableCell>
+                      <TableCell>{log.user?.name || (log.userId ? `User (${log.userId.substring(0,8)}...)` : "System")}</TableCell>
+                      <TableCell>{log.targetType || "N/A"}</TableCell>
+                      <TableCell className="truncate max-w-[100px]">{log.targetId || "N/A"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground truncate max-w-[200px]">
+                        {log.details ? (typeof log.details === 'string' ? log.details : JSON.stringify(log.details)) : "N/A"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-center py-10">
+                <p className="text-muted-foreground">No audit logs found.</p>
+              </div>
+            )}
+          </div>
         </CardContent>
+        {auditLogs.length > perPage && (
+          <CardFooter className="py-4 border-t">
+            <DataTablePagination
+              count={auditLogs.length}
+              page={page}
+              perPage={perPage}
+              setPage={setPage}
+              setPerPage={(value) => { setPerPage(value); setPage(1); }}
+            />
+          </CardFooter>
+        )}
       </Card>
     </div>
   );
