@@ -151,7 +151,6 @@ function LayoutRenderer({
                   <ShadSheetTitle className="sr-only">Main Navigation Menu</ShadSheetTitle>
                    <CustomSidebarHeader className="p-4 h-16 flex items-center justify-start border-b border-sidebar-border">
                       <Link href="/" className="flex items-center gap-2" onClick={handleMobileLinkClick}>
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-primary"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
                         <h1 className="text-xl font-bold font-headline tracking-tight">EvalTrack</h1>
                       </Link>
                    </CustomSidebarHeader>
@@ -163,9 +162,15 @@ function LayoutRenderer({
                  </CustomSidebarContent>
                   <CustomSidebarFooter className="p-2 mt-auto border-t border-sidebar-border">
                      <div className="flex items-center justify-between">
-                        <Link href="/my-profile" className="flex-1 min-w-0" onClick={handleMobileLinkClick}>
-                            <p className="text-sm font-medium text-sidebar-foreground truncate hover:underline" title={user?.name}>{user?.name}</p>
-                            <p className="text-xs text-sidebar-foreground/70 truncate" title={user?.email}>{user?.email}</p>
+                        <Link href="/my-profile" className="flex items-center gap-3 flex-1 min-w-0" onClick={handleMobileLinkClick}>
+                            <Avatar className="h-8 w-8">
+                                <AvatarImage src={user?.avatarUrl || undefined} alt={user?.name || "User"} />
+                                <AvatarFallback>{user?.name ? user.name.substring(0, 1).toUpperCase() : "U"}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-sidebar-foreground truncate hover:underline" title={user?.name}>{user?.name}</p>
+                                <p className="text-xs text-sidebar-foreground/70 truncate" title={user?.email}>{user?.email}</p>
+                            </div>
                         </Link>
                         
                         <div className="flex items-center">
@@ -195,7 +200,6 @@ function LayoutRenderer({
                <SidebarTrigger />
             </div>
              <Link href="/" className="flex items-center gap-2 md:hidden">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-primary"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
                 <h1 className="font-bold text-lg font-headline">EvalTrack</h1>
             </Link>
           </div>
