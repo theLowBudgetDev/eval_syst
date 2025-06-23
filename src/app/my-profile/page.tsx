@@ -41,7 +41,7 @@ const toBase64 = (file: File): Promise<string> =>
   });
 
 export default function MyProfilePage() {
-  const { user: loggedInUser, isLoading: authIsLoading, login: updateAuthContextUser } = useAuth();
+  const { user: loggedInUser, isLoading: authIsLoading, login: updateAuthContextUser, logout } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   
@@ -59,12 +59,10 @@ export default function MyProfilePage() {
   });
 
   React.useEffect(() => {
-    if (!authIsLoading && !loggedInUser) {
-      router.push('/login');
-    } else if (loggedInUser) {
+    if (!authIsLoading && loggedInUser) {
         setCurrentUserDetails(loggedInUser);
     }
-  }, [loggedInUser, authIsLoading, router]);
+  }, [loggedInUser, authIsLoading]);
 
   const fetchSupervisors = async () => {
     if (loggedInUser?.role !== 'ADMIN') {

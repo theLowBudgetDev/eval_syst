@@ -23,7 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DataTablePagination } from "@/components/shared/DataTablePagination";
 
 export default function DataBackupPage() {
-  const { user, isLoading: authIsLoading } = useAuth();
+  const { user, isLoading: authIsLoading, logout } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const [isBackingUp, setIsBackingUp] = React.useState(false);
@@ -51,14 +51,15 @@ export default function DataBackupPage() {
   }, [user, toast]);
 
   React.useEffect(() => {
-    if (!authIsLoading && user && user.role !== 'ADMIN') {
-      router.push('/login');
-    } else if (!authIsLoading && !user) {
-      router.push('/login');
-    } else if (user?.role === 'ADMIN') {
-      fetchHistory();
+    if (!authIsLoading && user) {
+      if (user.role !== 'ADMIN') {
+        logout();
+        router.push('/login');
+      } else {
+        fetchHistory();
+      }
     }
-  }, [user, authIsLoading, router, fetchHistory]);
+  }, [user, authIsLoading, router, fetchHistory, logout]);
 
   const handleStartBackup = async () => {
     if (!user) return;
@@ -109,8 +110,12 @@ export default function DataBackupPage() {
 
   const paginatedHistory = backupHistory.slice((page - 1) * perPage, page * perPage);
 
-  if (authIsLoading || (!authIsLoading && user && user.role !== 'ADMIN')) {
-    return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
+  if (authIsLoading || isLoadingHistory) {
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+  }
+  
+  if (!user) {
+    return null; // Should be handled by AppContent redirect
   }
 
   return (

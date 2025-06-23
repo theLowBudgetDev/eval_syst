@@ -46,7 +46,7 @@ const chartConfigDistribution = {
 } satisfies import("@/components/ui/chart").ChartConfig;
 
 export default function DashboardPage() {
-  const { user, isLoading: authIsLoading } = useAuth();
+  const { user, isLoading: authIsLoading, logout } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -60,10 +60,13 @@ export default function DashboardPage() {
   React.useEffect(() => {
     if (!authIsLoading && user) {
       if (user.role !== "ADMIN") {
+        // Redirect if a non-admin somehow lands here. This is a fallback,
+        // as AppContent should already handle the primary redirection.
         if (user.role === "SUPERVISOR") router.push("/supervisor-dashboard");
         else if (user.role === "EMPLOYEE") router.push("/employee-dashboard");
-        else router.push("/login");
+        else logout(); // Or just logout if role is unexpected
       } else {
+        // User is an admin, fetch data.
         setIsLoadingData(true);
         setIsLoadingCharts(true);
 
@@ -76,7 +79,6 @@ export default function DashboardPage() {
         ])
           .then(async ([usersRes, scoresRes, trendsRes, distributionRes, attendanceRes]) => {
             if (!usersRes.ok || !scoresRes.ok || !trendsRes.ok || !distributionRes.ok || !attendanceRes.ok) {
-              // A simple catch-all for any failed fetch
               throw new Error("Failed to fetch all necessary dashboard data.");
             }
 
@@ -105,7 +107,6 @@ export default function DashboardPage() {
                 : null;
             const averageScore = averageScoreValue ? `${averageScoreValue.toFixed(1)}/5` : "N/A";
             
-            // Dynamic trend calculation based on fetched chart data
             let trend = 0;
             const validTrendPoints = trendPointsData.filter(p => p.avgScore !== null);
             if (validTrendPoints.length >= 2) {
@@ -124,44 +125,14 @@ export default function DashboardPage() {
             }).length;
 
             setMetrics([
-              {
-                title: "Total Employees",
-                value: totalEmployees,
-                icon: Users,
-                trend: 0,
-                description: "Active users in system",
-              },
-              {
-                title: "Pending Evaluations",
-                value: pendingEvaluations,
-                icon: ClipboardList,
-                trend: 0,
-                description: "Approx. due evaluations",
-              },
-              {
-                title: "Overall Performance",
-                value: averageScore,
-                icon: TrendingUp,
-                trend: finalTrend,
-                description: "vs. start of period",
-              },
-              {
-                title: "Attendance Issues",
-                value: attendanceIssuesThisWeek,
-                icon: AlertTriangle,
-                trend: 0,
-                description: "Issues in the last 7 days",
-              },
+              { title: "Total Employees", value: totalEmployees, icon: Users, trend: 0, description: "Active users in system" },
+              { title: "Pending Evaluations", value: pendingEvaluations, icon: ClipboardList, trend: 0, description: "Approx. due evaluations" },
+              { title: "Overall Performance", value: averageScore, icon: TrendingUp, trend: finalTrend, description: "vs. start of period" },
+              { title: "Attendance Issues", value: attendanceIssuesThisWeek, icon: AlertTriangle, trend: 0, description: "Issues in the last 7 days" },
             ]);
-            setIsLoadingData(false);
-            setIsLoadingCharts(false);
           })
           .catch((err) => {
-            toast({
-              title: "Error Fetching Dashboard Data",
-              description: (err as Error).message,
-              variant: "destructive",
-            });
+            toast({ title: "Error Fetching Dashboard Data", description: (err as Error).message, variant: "destructive" });
             setMetrics([
               { title: "Total Employees", value: "N/A", icon: Users },
               { title: "Pending Evaluations", value: "N/A", icon: ClipboardList },
@@ -170,14 +141,14 @@ export default function DashboardPage() {
             ]);
             setPerformanceTrendData([]);
             setEvaluationDistributionData([]);
-            setIsLoadingData(false);
-            setIsLoadingCharts(false);
+          })
+          .finally(() => {
+              setIsLoadingData(false);
+              setIsLoadingCharts(false);
           });
       }
-    } else if (!authIsLoading && !user) {
-      router.push("/login");
     }
-  }, [user, authIsLoading, router, toast]);
+  }, [user, authIsLoading, router, toast, logout]);
 
   if (authIsLoading || !user || user.role !== "ADMIN") {
     return (

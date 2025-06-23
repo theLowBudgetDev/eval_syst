@@ -84,12 +84,10 @@ export default function MyProgressPage() {
   }, [user, toast]);
 
   React.useEffect(() => {
-    if (!authIsLoading && !user) {
-      router.push('/login');
-    } else if (user) {
+    if (!authIsLoading && user) {
       fetchData();
     }
-  }, [user, authIsLoading, router, fetchData]);
+  }, [user, authIsLoading, fetchData]);
 
 
   const handleAddWorkOutput = async () => {
@@ -141,7 +139,7 @@ export default function MyProgressPage() {
     }
   };
   
-  if (authIsLoading || isLoadingData || !user) {
+  if (authIsLoading || isLoadingData) {
     return (
         <div className="space-y-6">
             <PageHeader title="My Progress Overview" description="Track your submitted work, attendance, and contributions."/>
@@ -153,6 +151,9 @@ export default function MyProgressPage() {
     );
   }
 
+  if (!user) {
+    return null; // Should be handled by AppContent redirect
+  }
 
   return (
     <div className="space-y-6">
@@ -174,30 +175,32 @@ export default function MyProgressPage() {
             <CardDescription>A list of your recently submitted work items.</CardDescription>
           </CardHeader>
           <CardContent>
-            {myWorkOutputs.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Submission Date</TableHead>
-                    <TableHead>Description/Link</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {myWorkOutputs.slice(0, 5).map((output) => ( 
-                    <TableRow key={output.id}>
-                      <TableCell className="font-medium">{output.title}</TableCell>
-                      <TableCell>{format(new Date(output.submissionDate), "PP")}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground truncate max-w-[200px]">
-                        {output.description || (output.fileUrl ? <a href={output.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View Link</a> : "N/A")}
-                      </TableCell>
+            <div className="overflow-x-auto">
+              {myWorkOutputs.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Submission Date</TableHead>
+                      <TableHead>Description/Link</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="text-muted-foreground py-4 text-center">You haven't submitted any work outputs yet.</p>
-            )}
+                  </TableHeader>
+                  <TableBody>
+                    {myWorkOutputs.slice(0, 5).map((output) => ( 
+                      <TableRow key={output.id}>
+                        <TableCell className="font-medium">{output.title}</TableCell>
+                        <TableCell>{format(new Date(output.submissionDate), "PP")}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground truncate max-w-[200px]">
+                          {output.description || (output.fileUrl ? <a href={output.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View Link</a> : "N/A")}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-muted-foreground py-4 text-center">You haven't submitted any work outputs yet.</p>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -207,40 +210,42 @@ export default function MyProgressPage() {
             <CardDescription>Your attendance summary for the last few records.</CardDescription>
           </CardHeader>
           <CardContent>
-            {myAttendance.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Notes</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {myAttendance.map((record) => (
-                    <TableRow key={record.id}>
-                      <TableCell>{format(new Date(record.date), "PP")}</TableCell>
-                      <TableCell>
-                        <Badge 
-                            variant={
-                                record.status === "PRESENT" ? "default" :
-                                record.status === "ON_LEAVE" ? "secondary" :
-                                record.status === "LATE" ? "outline" : 
-                                "destructive" 
-                            }
-                            className={record.status === "LATE" ? "border-yellow-500 text-yellow-700 dark:border-yellow-400 dark:text-yellow-300" : ""}
-                        >
-                            {record.status.replace("_", " ")}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{record.notes || "N/A"}</TableCell>
+            <div className="overflow-x-auto">
+              {myAttendance.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Notes</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="text-muted-foreground py-4 text-center">No recent attendance records found.</p>
-            )}
+                  </TableHeader>
+                  <TableBody>
+                    {myAttendance.map((record) => (
+                      <TableRow key={record.id}>
+                        <TableCell>{format(new Date(record.date), "PP")}</TableCell>
+                        <TableCell>
+                          <Badge 
+                              variant={
+                                  record.status === "PRESENT" ? "default" :
+                                  record.status === "ON_LEAVE" ? "secondary" :
+                                  record.status === "LATE" ? "outline" : 
+                                  "destructive" 
+                              }
+                              className={record.status === "LATE" ? "border-yellow-500 text-yellow-700 dark:border-yellow-400 dark:text-yellow-300" : ""}
+                          >
+                              {record.status.replace("_", " ")}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{record.notes || "N/A"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-muted-foreground py-4 text-center">No recent attendance records found.</p>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

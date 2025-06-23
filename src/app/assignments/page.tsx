@@ -44,7 +44,7 @@ import { DataTablePagination } from "@/components/shared/DataTablePagination";
 const NO_SUPERVISOR_VALUE = "--NONE--";
 
 export default function SupervisorAssignmentsPage() {
-  const { user, isLoading: authIsLoading } = useAuth();
+  const { user, isLoading: authIsLoading, logout } = useAuth();
   const router = useRouter();
 
   const [employees, setEmployees] = React.useState<AppUser[]>([]);
@@ -87,14 +87,13 @@ export default function SupervisorAssignmentsPage() {
   }, [toast]);
 
   React.useEffect(() => {
-    if (!authIsLoading) {
-      if (user?.role !== 'ADMIN') {
-        router.push('/login');
-      } else {
-        fetchData();
-      }
+    if (!authIsLoading && user?.role !== 'ADMIN') {
+      logout();
+      router.push('/login');
+    } else if (user) {
+      fetchData();
     }
-  }, [user, authIsLoading, router, fetchData]);
+  }, [user, authIsLoading, router, fetchData, logout]);
 
   const handleOpenAssignDialog = (employee: AppUser) => {
     setSelectedEmployee(employee);
@@ -193,6 +192,10 @@ export default function SupervisorAssignmentsPage() {
         <Card className="shadow-lg"><div className="p-4 space-y-2">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div></Card>
       </div>
     );
+  }
+  
+  if (!user) {
+    return null; // Should be handled by AppContent redirect
   }
 
   return (

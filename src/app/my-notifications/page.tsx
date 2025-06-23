@@ -41,14 +41,10 @@ export default function MyNotificationsPage() {
   }, [user, toast]);
 
   React.useEffect(() => {
-    if (!authIsLoading) {
-      if (!user) {
-        router.push('/login');
-      } else {
-        fetchAllNotifications();
-      }
+    if (!authIsLoading && user) {
+      fetchAllNotifications();
     }
-  }, [user, authIsLoading, router, fetchAllNotifications]);
+  }, [user, authIsLoading, fetchAllNotifications]);
 
 
   if (authIsLoading || isLoadingData) {
@@ -69,6 +65,10 @@ export default function MyNotificationsPage() {
         </Card>
       </div>
     );
+  }
+  
+  if (!user) {
+    return null; // Should be handled by AppContent redirect
   }
 
   return (

@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/shared/DataTablePagination";
 
 export default function AuditLogsPage() {
-  const { user, isLoading: authIsLoading } = useAuth();
+  const { user, isLoading: authIsLoading, logout } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -59,19 +59,22 @@ export default function AuditLogsPage() {
   React.useEffect(() => {
     if (!authIsLoading && user) {
       if (user.role !== 'ADMIN') {
+        logout();
         router.push('/login');
       } else {
         fetchData();
       }
-    } else if (!authIsLoading && !user) {
-      router.push('/login');
     }
-  }, [user, authIsLoading, router, fetchData]);
+  }, [user, authIsLoading, router, fetchData, logout]);
   
   const paginatedLogs = auditLogs.slice((page - 1) * perPage, page * perPage);
 
-  if (authIsLoading || (!isLoadingData && user?.role !== 'ADMIN')) {
-    return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
+  if (authIsLoading || isLoadingData) {
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+  }
+  
+  if (!user) {
+    return null; // Should be handled by AppContent redirect
   }
 
   return (

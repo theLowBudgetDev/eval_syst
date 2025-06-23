@@ -16,7 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { format, parseISO } from "date-fns";
 
 export default function SupervisorDashboardPage() {
-  const { user, isLoading: authIsLoading } = useAuth();
+  const { user, isLoading: authIsLoading, logout } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -31,7 +31,7 @@ export default function SupervisorDashboardPage() {
       if (user.role !== 'SUPERVISOR') {
         if (user.role === 'ADMIN') router.push('/');
         else if (user.role === 'EMPLOYEE') router.push('/employee-dashboard');
-        else router.push('/login');
+        else logout();
       } else {
         setIsLoadingData(true);
         const headers = new Headers();
@@ -81,10 +81,8 @@ export default function SupervisorDashboardPage() {
           setTeamWorkOutputs([]);
         }).finally(() => setIsLoadingData(false));
       }
-    } else if (!authIsLoading && !user) {
-      router.push('/login');
     }
-  }, [user, authIsLoading, router, toast]);
+  }, [user, authIsLoading, router, toast, logout]);
 
   const teamMembersCount = teamMembers.length;
 
@@ -106,7 +104,7 @@ export default function SupervisorDashboardPage() {
     return "destructive";
   };
 
-  if (authIsLoading || !user || user.role !== 'SUPERVISOR') {
+  if (authIsLoading || isLoadingData) {
      return (
         <div className="space-y-6">
             <PageHeader title="Supervisor Dashboard" description="Overview of your team's performance and tasks."/>
@@ -116,6 +114,10 @@ export default function SupervisorDashboardPage() {
             <Skeleton className="h-[300px] w-full rounded-lg" />
         </div>
     );
+  }
+  
+  if (!user) {
+    return null; // Should be handled by AppContent redirect
   }
 
   return (

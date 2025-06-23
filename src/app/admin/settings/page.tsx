@@ -27,7 +27,7 @@ const DEFAULT_SETTINGS: Omit<SystemSetting, 'id' | 'createdAt' | 'updatedAt'> = 
 };
 
 export default function AdminSettingsPage() {
-  const { user, isLoading: authIsLoading } = useAuth();
+  const { user, isLoading: authIsLoading, logout } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -36,33 +36,36 @@ export default function AdminSettingsPage() {
   const [isSaving, setIsSaving] = React.useState(false);
 
   React.useEffect(() => {
-    if (!authIsLoading && user && user.role === 'ADMIN') {
-      setIsLoadingSettings(true);
-      const headers = new Headers();
-      headers.append('X-User-Id', user.id);
-      headers.append('X-User-Role', user.role);
+    if (!authIsLoading && user) {
+      if(user.role !== 'ADMIN') {
+        logout();
+        router.push('/login');
+      } else {
+        setIsLoadingSettings(true);
+        const headers = new Headers();
+        headers.append('X-User-Id', user.id);
+        headers.append('X-User-Role', user.role);
 
-      fetch('/api/admin/settings', { headers })
-        .then(async res => {
-          if (!res.ok) {
-            const errorBody = await res.json().catch(() => ({ message: "Failed to fetch settings" }));
-            throw new Error(errorBody.message);
-          }
-          return res.json();
-        })
-        .then((data: SystemSetting) => {
-          const { id, createdAt, updatedAt, ...rest } = data;
-          setSettings(rest);
-        })
-        .catch(error => {
-          toast({ title: "Error Loading Settings", description: (error as Error).message, variant: "destructive" });
-          setSettings(DEFAULT_SETTINGS); // Fallback to defaults on error
-        })
-        .finally(() => setIsLoadingSettings(false));
-    } else if (!authIsLoading && (!user || user.role !== 'ADMIN')) {
-      router.push('/login');
+        fetch('/api/admin/settings', { headers })
+          .then(async res => {
+            if (!res.ok) {
+              const errorBody = await res.json().catch(() => ({ message: "Failed to fetch settings" }));
+              throw new Error(errorBody.message);
+            }
+            return res.json();
+          })
+          .then((data: SystemSetting) => {
+            const { id, createdAt, updatedAt, ...rest } = data;
+            setSettings(rest);
+          })
+          .catch(error => {
+            toast({ title: "Error Loading Settings", description: (error as Error).message, variant: "destructive" });
+            setSettings(DEFAULT_SETTINGS);
+          })
+          .finally(() => setIsLoadingSettings(false));
+      }
     }
-  }, [user, authIsLoading, router, toast]);
+  }, [user, authIsLoading, router, toast, logout]);
 
   const handleInputChange = (field: keyof typeof settings, value: string | boolean) => {
     setSettings(prev => ({ ...prev, [field]: value }));
@@ -88,15 +91,7 @@ export default function AdminSettingsPage() {
         throw new Error(errorBody.message);
       }
       
-      // Explicitly re-fetch settings after successful save to ensure latest data
-      const refetchRes = await fetch('/api/admin/settings', { headers });
-      if (!refetchRes.ok) {
-          const errorBody = await refetchRes.json().catch(() => ({ message: "Failed to re-fetch settings after save" }));
-          throw new Error(errorBody.message);
-      }
-      const latestSettings: SystemSetting = await refetchRes.json();
-
-      // Update state with the latest data
+      const latestSettings: SystemSetting = await res.json();
       const { id, createdAt, updatedAt, ...rest } = latestSettings;
       setSettings(rest);
       
@@ -122,9 +117,8 @@ export default function AdminSettingsPage() {
     );
   }
 
-  if (!user || user.role !== 'ADMIN') {
-    // This case should be handled by the useEffect redirect, but as a fallback:
-    return <div className="flex justify-center items-center h-screen">Loading or unauthorized...</div>;
+  if (!user) {
+    return null; // Should be handled by AppContent redirect
   }
 
   return (

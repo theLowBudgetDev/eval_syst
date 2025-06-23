@@ -160,36 +160,33 @@ function LayoutRenderer({
                       <RenderNavLinks role={user?.role || null} onLinkClick={handleMobileLinkClick} />
                     </SidebarMenu>
                  </CustomSidebarContent>
-                  <CustomSidebarFooter className="p-2 mt-auto border-t border-sidebar-border space-y-2">
-                      <Link href="/my-profile" className="flex items-center gap-2 p-1 rounded-md hover:bg-sidebar-accent" onClick={handleMobileLinkClick}>
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={user?.avatarUrl || undefined} alt={user?.name || "User"} />
-                          <AvatarFallback>{user?.name ? user.name.substring(0, 2).toUpperCase() : "U"}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-sidebar-foreground truncate" title={user?.name}>{user?.name}</p>
-                          <p className="text-xs text-sidebar-foreground/70 truncate" title={user?.email}>{user?.email}</p>
+                  <CustomSidebarFooter className="p-2 mt-auto border-t border-sidebar-border">
+                     <div className="flex items-center justify-between">
+                        <Link href="/my-profile" className="flex-1 min-w-0" onClick={handleMobileLinkClick}>
+                            <p className="text-sm font-medium text-sidebar-foreground truncate hover:underline" title={user?.name}>{user?.name}</p>
+                            <p className="text-xs text-sidebar-foreground/70 truncate" title={user?.email}>{user?.email}</p>
+                        </Link>
+                        
+                        <div className="flex items-center">
+                            <DarkModeToggle />
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive">
+                                        <LogOut className="h-4 w-4" />
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you sure you want to logout?</AlertDialogTitle>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={logout} className={buttonVariants({ variant: "destructive" })}>Logout</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
                         </div>
-                      </Link>
-                      <div className="flex items-center justify-between">
-                          <DarkModeToggle />
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="destructive" size="sm">
-                                <LogOut className="mr-2 h-4 w-4" /> Logout
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Are you sure you want to logout?</AlertDialogTitle>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={logout} className={buttonVariants({ variant: "destructive" })}>Logout</AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                      </div>
+                    </div>
                   </CustomSidebarFooter>
               </SheetContent>
             </Sheet>
@@ -282,6 +279,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     }
   }, [user, isLoading, router, pathname]);
 
+  // While loading the authentication state, show a global loading screen.
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-background">
@@ -290,22 +288,24 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
     );
   }
 
-  if (!user && pathname !== '/login') {
-     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-background">
-        <LoadingIndicator text="Redirecting to login..." />
-      </div>
-     );
-  }
-
+  // If loading is done and we're on the login page, render it directly.
+  // This allows the login page to be displayed without the main layout.
   if (pathname === '/login') {
     return <>{children}</>;
   }
 
+  // If loading is done, but there's no user, and we are NOT on the login page,
+  // it means a redirect is in progress. Show a loading screen to prevent
+  // flashing any protected content. The useEffect hook will handle the redirect.
   if (!user) {
-    return null;
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-background">
+        <LoadingIndicator text="Redirecting to login..." />
+      </div>
+    );
   }
 
+  // If we have a user and are not on the login page, render the full application layout.
   return (
     <TooltipProvider>
       <SidebarProvider defaultOpen={false}>

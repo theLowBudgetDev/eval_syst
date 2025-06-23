@@ -23,7 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
 export default function EmployeeDashboardPage() {
-  const { user, isLoading: authIsLoading } = useAuth();
+  const { user, isLoading: authIsLoading, logout } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -38,7 +38,7 @@ export default function EmployeeDashboardPage() {
       if (user.role !== 'EMPLOYEE') {
         if (user.role === 'ADMIN') router.push('/');
         else if (user.role === 'SUPERVISOR') router.push('/supervisor-dashboard');
-        else router.push('/login');
+        else logout();
       } else {
         setIsLoadingData(true);
         fetch(`/api/users/${user.id}`)
@@ -50,10 +50,8 @@ export default function EmployeeDashboardPage() {
           .catch(err => toast({ title: "Error", description: err.message, variant: "destructive" }))
           .finally(() => setIsLoadingData(false));
       }
-    } else if (!authIsLoading && !user) {
-      router.push('/login');
     }
-  }, [user, authIsLoading, router, toast]);
+  }, [user, authIsLoading, router, toast, logout]);
 
   const myPerformanceScoreCount = userData?.performanceScoresReceived?.length || 0;
   const myWorkOutputCount = userData?.workOutputs?.length || 0;
@@ -97,7 +95,7 @@ export default function EmployeeDashboardPage() {
     }
   };
 
-  if (authIsLoading || !user || user.role !== 'EMPLOYEE') {
+  if (authIsLoading || isLoadingData) {
      return (
         <div className="space-y-6">
             <PageHeader title="Welcome!" description="Your personal performance and task overview."/>
@@ -107,6 +105,10 @@ export default function EmployeeDashboardPage() {
             <Skeleton className="h-[120px] w-full rounded-lg" />
         </div>
     );
+  }
+
+  if (!user) {
+    return null; // Should be handled by AppContent redirect
   }
 
   const latestScoreValue = userData?.performanceScoresReceived?.[0]?.score;
