@@ -40,21 +40,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   React.useEffect(() => {
-    const storedUser = localStorage.getItem("evaltrackUser");
-    if (storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser) as AppUser;
-        if (parsedUser && parsedUser.id && parsedUser.role &&
-            ['ADMIN', 'SUPERVISOR', 'EMPLOYEE'].includes(parsedUser.role)) {
-            setUser(parsedUser);
-        } else {
-            localStorage.removeItem("evaltrackUser");
-        }
-      } catch (error) {
-        console.error("Failed to parse stored user:", error);
-        localStorage.removeItem("evaltrackUser");
-      }
-    }
+    // This is the key change. We always clear stale user data on initial app load.
+    // This forces every new session to start at the login page.
+    localStorage.removeItem("evaltrackUser");
+    setUser(null);
     setIsLoading(false);
   }, []);
 
@@ -63,12 +52,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("evaltrackUser", JSON.stringify(loggedInUser));
 
     // Redirect based on role
-    // Ensure pathname check to avoid redirect loop if already on target dashboard
-    if (loggedInUser.role === "ADMIN" && pathname !== "/") {
+    // This logic runs *after* a successful login.
+    if (loggedInUser.role === "ADMIN") {
       router.push("/");
-    } else if (loggedInUser.role === "SUPERVISOR" && pathname !== "/supervisor-dashboard") {
+    } else if (loggedInUser.role === "SUPERVISOR") {
       router.push("/supervisor-dashboard");
-    } else if (loggedInUser.role === "EMPLOYEE" && pathname !== "/employee-dashboard") {
+    } else if (loggedInUser.role === "EMPLOYEE") {
       router.push("/employee-dashboard");
     }
   };

@@ -288,7 +288,7 @@ export default function AppContent({ children }: { children: React.ReactNode }) 
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-background">
-        <LoadingIndicator text="Loading Application..." />
+        <LoadingIndicator text="Initializing Application..." />
       </div>
     );
   }
